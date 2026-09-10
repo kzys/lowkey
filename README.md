@@ -25,6 +25,8 @@ Working:
 - A legend line above the grid spells out what every button currently does.
 - Bottom-anchored overlay sized with `-h`; pad picked by name with `-p` or
   auto-detected as the first device with a `BTN_SOUTH`.
+- `--print-height` prints the effective height and exits, so a launcher
+  script can reserve that much screen space without hardcoding it.
 - Cross-builds for aarch64, with no runtime dependency on the device's
   libwayland: `wayland-client`'s pure-Rust backend speaks the wire protocol
   directly, so there's nothing to pull off the device before linking.

@@ -219,17 +219,26 @@ delegate_noop!(App: ignore zwlr_layer_shell_v1::ZwlrLayerShellV1);
 
 fn usage() -> ! {
     eprintln!(
-        "usage: gpkbd [-h height] [-p pad-name]\n  \
-         -h  surface height in pixels (default {})\n  \
-         -p  substring of the gamepad's evdev name",
+        "usage: gpkbd [-h height] [-p pad-name] [--print-height]\n  \
+         -h              surface height in pixels (default {})\n  \
+         -p              substring of the gamepad's evdev name\n  \
+         --print-height  print the effective height and exit, for callers\n  \
+         \x20                that need to reserve screen space for gpkbd",
         render::DEFAULT_HEIGHT
     );
     std::process::exit(2);
 }
 
-fn parse_args() -> (i32, Option<String>) {
+struct Args {
+    height: i32,
+    pad_name: Option<String>,
+    print_height: bool,
+}
+
+fn parse_args() -> Args {
     let mut height = render::DEFAULT_HEIGHT;
     let mut pad_name = None;
+    let mut print_height = false;
 
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -242,14 +251,20 @@ fn parse_args() -> (i32, Option<String>) {
                 let Some(v) = args.next() else { usage() };
                 pad_name = Some(v);
             }
+            "--print-height" => print_height = true,
             _ => usage(),
         }
     }
-    (height, pad_name)
+    Args { height, pad_name, print_height }
 }
 
 fn main() {
-    let (height, pad_name) = parse_args();
+    let args = parse_args();
+    if args.print_height {
+        println!("{}", args.height);
+        return;
+    }
+    let (height, pad_name) = (args.height, args.pad_name);
 
     let pad = pad::open_pad(pad_name.as_deref()).unwrap_or_else(|| die("no gamepad found"));
     if let Err(e) = pad.grab(true) {
