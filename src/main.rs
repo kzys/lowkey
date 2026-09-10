@@ -86,10 +86,11 @@ fn draw(app: &mut App) {
     let (width, height) = (app.width, app.height);
     let (sel_row, sel_col) = (app.keyboard.sel_row, app.keyboard.sel_col);
     let shift = app.keyboard.shift;
+    let ctrl = app.keyboard.ctrl;
     let latched = app.keyboard.latched();
     // Copy fields (not a borrow of `app`), so `&app.font` below is fine.
     let pixels = unsafe { std::slice::from_raw_parts_mut(app.pixels, app.pixels_len) };
-    render::draw(pixels, width, height, sel_row, sel_col, shift, latched, &app.font);
+    render::draw(pixels, width, height, sel_row, sel_col, shift, ctrl, latched, &app.font);
 }
 
 fn commit(app: &mut App) {

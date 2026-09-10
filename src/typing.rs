@@ -5,7 +5,7 @@ use std::time::Duration;
 use input_linux::{sys, EventKind, InputId, Key, KeyEvent, KeyState, SynchronizeEvent, UInputHandle};
 
 use crate::keyboard::Keyboard;
-use crate::keys::{EXTRA_KEYS, KEYS};
+use crate::keys::{Cell, EXTRA_KEYS, KEYS};
 use crate::util::die;
 
 /// One step of a key tap, in emission order.
@@ -80,8 +80,12 @@ pub fn open_uinput() -> UInputHandle<File> {
         .set_evbit(EventKind::Key)
         .unwrap_or_else(|e| die(&format!("UI_SET_EVBIT: {e}")));
 
-    for k in KEYS.iter().flatten().flatten() {
-        let _ = uinput.set_keybit(k.code);
+    for row in &KEYS {
+        for cell in row {
+            if let Cell::Key(k) = cell {
+                let _ = uinput.set_keybit(k.code);
+            }
+        }
     }
     for code in EXTRA_KEYS {
         let _ = uinput.set_keybit(code);

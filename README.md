@@ -14,11 +14,13 @@ Working:
 
 - 14x4 QWERTY grid, D-pad/hat navigation, wraps at the edges and
   auto-repeats on a held direction. Each row holds a physical QWERTY row's
-  keys at their real position, trailing punctuation included (`-`/`=` end
-  the digit row, `[`/`]`/`\` end the letter row, Ent ends the home row,
-  matching an ANSI keyboard). Rows shorter than the 14-key letter row run
-  out of real keys before the last column; those cells stay empty rather
-  than fake a key that isn't there.
+  keys at their real position, trailing punctuation included (`-`/`=`/Esc
+  end the digit row, `[`/`]`/`\` end the letter row, Ent ends the home row,
+  matching an ANSI keyboard). The home and bottom rows lead with a Ctrl/Shift
+  indicator cell instead of a real key (see below), which — like every other
+  row's leading key — keeps 1/Q/A/Z aligned in the same column. Rows shorter
+  than the 14-key letter row run out of real keys before the last column;
+  those cells stay empty rather than fake a key that isn't there.
 - `BTN_EAST` (A) inputs the selected key, `BTN_SOUTH` (B) is backspace,
   matching the B-is-back convention on this device's Nintendo-style layout.
   `BTN_NORTH` (Y) is space, `BTN_WEST` (X) and Start both enter, Select
@@ -28,7 +30,8 @@ Working:
 - Shift and Ctrl are held modifiers, like a real keyboard: either shoulder
   button on the left (L1/L2) holds Shift, R1 holds Ctrl, both for as long as
   they're physically held. Shifted symbol keys show their shifted glyph
-  live while held.
+  live while held, and the grid's Ctrl/Shift cells (not typeable themselves)
+  light up while the matching chord is down.
 - R2 is a held chord: while it's down, D-pad/hat up and down send
   PageUp/PageDown (auto-repeating) instead of moving the grid selection.
 - A legend line above the grid spells out what every button currently does.

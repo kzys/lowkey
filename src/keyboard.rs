@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use input_linux::Key;
 
-use crate::keys::{COLS, KEYS, ROWS};
+use crate::keys::{Cell, COLS, KEYS, ROWS};
 
 const REPEAT_DELAY: Duration = Duration::from_millis(400);
 const REPEAT_INTERVAL: Duration = Duration::from_millis(120);
@@ -47,10 +47,13 @@ impl Keyboard {
         self.dirty = true;
     }
 
-    /// The key at the current selection, or None if it's an empty cell
-    /// (the grid runs a few cells short of a full rectangle in places).
+    /// The key at the current selection, or None if it's not a typeable
+    /// cell (an empty gap, or a Shift/Ctrl indicator).
     pub fn selected_key(&self) -> Option<Key> {
-        KEYS[self.sel_row][self.sel_col].map(|k| k.code)
+        match KEYS[self.sel_row][self.sel_col] {
+            Cell::Key(k) => Some(k.code),
+            _ => None,
+        }
     }
 
     /// Sets shift to the pad's currently held state, the way a real keyboard's

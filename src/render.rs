@@ -1,5 +1,5 @@
 use crate::font::Rasterizer;
-use crate::keys::{COLS, KEYS, LEGEND, ROWS};
+use crate::keys::{Cell, COLS, KEYS, LEGEND, ROWS};
 
 pub const LEGEND_H: i32 = 18;
 // 36px/row (unchanged from the 5-row grid); one fewer row now, so this
@@ -51,8 +51,9 @@ fn fill(pixels: &mut [u32], width: i32, height: i32, x: i32, y: i32, w: i32, h: 
 }
 
 /// Renders the full overlay: the legend line, the key grid with `sel_row`/
-/// `sel_col` highlighted (shifted labels if `shift`), and the latched-modifier
-/// tint in the grid's top-left corner if `latched`.
+/// `sel_col` highlighted (shifted labels if `shift`), the Ctrl/Shift
+/// indicator cells lit up while `ctrl`/`shift` are held, and the
+/// latched-modifier tint in the grid's top-left corner if `latched`.
 pub fn draw(
     pixels: &mut [u32],
     width: i32,
@@ -60,6 +61,7 @@ pub fn draw(
     sel_row: usize,
     sel_col: usize,
     shift: bool,
+    ctrl: bool,
     latched: bool,
     font: &Rasterizer,
 ) {
@@ -80,17 +82,26 @@ pub fn draw(
             let y = grid_y0 + r as i32 * ch;
             let selected = r == sel_row && c == sel_col;
 
-            let Some(key) = &KEYS[r][c] else {
-                // An empty cell (the grid runs short of a full rectangle in
-                // places) reads as a gap, except when selected: still show
-                // that, so landing here isn't mistaken for a stuck cursor.
-                if selected {
-                    fill(pixels, width, height, x + 1, y + 1, cw - 2, ch - 2, COLOR_SELECTED);
+            let (label, bg) = match &KEYS[r][c] {
+                Cell::Empty => {
+                    // An empty cell (the grid runs short of a full rectangle
+                    // in places) reads as a gap, except when selected: still
+                    // show that, so landing here isn't mistaken for a stuck
+                    // cursor.
+                    if selected {
+                        fill(pixels, width, height, x + 1, y + 1, cw - 2, ch - 2, COLOR_SELECTED);
+                    }
+                    continue;
                 }
-                continue;
+                Cell::Key(key) => {
+                    let label = if shift { key.shifted } else { key.label };
+                    (label, if selected { COLOR_SELECTED } else { COLOR_KEY })
+                }
+                // Held state wins over selection: knowing the chord is down
+                // matters more than where the cursor happens to be.
+                Cell::Shift => ("Shift", if shift { COLOR_LATCHED } else if selected { COLOR_SELECTED } else { COLOR_KEY }),
+                Cell::Ctrl => ("Ctrl", if ctrl { COLOR_LATCHED } else if selected { COLOR_SELECTED } else { COLOR_KEY }),
             };
-            let label = if shift { key.shifted } else { key.label };
-            let bg = if selected { COLOR_SELECTED } else { COLOR_KEY };
 
             fill(pixels, width, height, x + 1, y + 1, cw - 2, ch - 2, bg);
 
@@ -115,10 +126,10 @@ mod tests {
     const WIDTH: i32 = 640;
     const HEIGHT: i32 = DEFAULT_HEIGHT;
 
-    fn render(sel_row: usize, sel_col: usize, shift: bool, latched: bool) -> Vec<u32> {
+    fn render(sel_row: usize, sel_col: usize, shift: bool, ctrl: bool, latched: bool) -> Vec<u32> {
         let mut pixels = vec![0u32; (WIDTH * HEIGHT) as usize];
         let font = Rasterizer::load(crate::font::DEFAULT_PATH);
-        draw(&mut pixels, WIDTH, HEIGHT, sel_row, sel_col, shift, latched, &font);
+        draw(&mut pixels, WIDTH, HEIGHT, sel_row, sel_col, shift, ctrl, latched, &font);
         pixels
     }
 
@@ -126,27 +137,56 @@ mod tests {
         pixels[(y * WIDTH + x) as usize]
     }
 
+    // The grid's top-left corner (row 0, col 0) is always a real key ('`'),
+    // never an indicator or gap, so it's a safe stand-in for "some key cell".
     #[test]
     fn selected_cell_gets_the_selected_color() {
-        let pixels = render(0, 0, false, false);
+        let pixels = render(0, 0, false, false, false);
         assert_eq!(px(&pixels, 2, LEGEND_H + 2), COLOR_SELECTED);
     }
 
     #[test]
     fn unselected_cell_gets_the_key_color() {
-        let pixels = render(2, 2, false, false);
+        let pixels = render(2, 2, false, false, false);
         assert_eq!(px(&pixels, 2, LEGEND_H + 2), COLOR_KEY);
     }
 
     #[test]
     fn latched_modifier_tints_the_grids_corner() {
-        let pixels = render(2, 2, false, true);
+        let pixels = render(2, 2, false, false, true);
         assert_eq!(px(&pixels, 2, LEGEND_H + 2), COLOR_LATCHED);
+    }
+
+    // Row 2 col 0 is the Ctrl indicator, row 3 col 0 is the Shift indicator
+    // (see keys::KEYS); neither is ever the current selection in these
+    // cases, so any highlighting comes only from the held chord.
+    #[test]
+    fn ctrl_indicator_highlights_only_while_ctrl_is_held() {
+        let ch = (DEFAULT_HEIGHT - LEGEND_H) / ROWS as i32;
+        let y = LEGEND_H + 2 * ch + 2;
+
+        let pixels = render(0, 0, false, false, false);
+        assert_eq!(px(&pixels, 2, y), COLOR_KEY);
+
+        let pixels = render(0, 0, false, true, false);
+        assert_eq!(px(&pixels, 2, y), COLOR_LATCHED);
+    }
+
+    #[test]
+    fn shift_indicator_highlights_only_while_shift_is_held() {
+        let ch = (DEFAULT_HEIGHT - LEGEND_H) / ROWS as i32;
+        let y = LEGEND_H + 3 * ch + 2;
+
+        let pixels = render(0, 0, false, false, false);
+        assert_eq!(px(&pixels, 2, y), COLOR_KEY);
+
+        let pixels = render(0, 0, true, false, false);
+        assert_eq!(px(&pixels, 2, y), COLOR_LATCHED);
     }
 
     #[test]
     fn legend_strip_draws_visible_text() {
-        let pixels = render(0, 0, false, false);
+        let pixels = render(0, 0, false, false, false);
         let drawn = (0..WIDTH)
             .flat_map(|x| (0..LEGEND_H).map(move |y| (x, y)))
             .filter(|&(x, y)| px(&pixels, x, y) != COLOR_BG)
