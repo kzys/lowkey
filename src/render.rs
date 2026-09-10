@@ -181,8 +181,8 @@ mod tests {
         LEGEND_H + row * row_h() + 2
     }
 
-    fn right_cell_xy(row: i32) -> (i32, i32) {
-        (13 * (WIDTH / COLS as i32) + 2, LEGEND_H + row * row_h() + 2)
+    fn cell_xy(row: i32, col: i32) -> (i32, i32) {
+        (col * (WIDTH / COLS as i32) + 2, LEGEND_H + row * row_h() + 2)
     }
 
     // Row 2 col 0 is the Ctrl indicator, row 3 col 0 is the Shift indicator
@@ -210,10 +210,11 @@ mod tests {
         assert_eq!(px(&pixels, 2, y), COLOR_LATCHED);
     }
 
-    // Row 2 col 13 is the R2 indicator, row 3 col 13 is the R1 indicator.
+    // Bottom row col 12 is the R2 indicator, col 13 is R1 (see keys::KEYS):
+    // left to right, R2 then R1, matching reaching across the shoulder.
     #[test]
     fn r2_indicator_highlights_only_while_r2_is_held() {
-        let (x, y) = right_cell_xy(2);
+        let (x, y) = cell_xy(3, 12);
 
         let pixels = render(0, 0, false, false, false, false, false);
         assert_eq!(px(&pixels, x, y), COLOR_KEY);
@@ -224,7 +225,7 @@ mod tests {
 
     #[test]
     fn r1_indicator_highlights_only_while_r1_is_held() {
-        let (x, y) = right_cell_xy(3);
+        let (x, y) = cell_xy(3, 13);
 
         let pixels = render(0, 0, false, false, false, false, false);
         assert_eq!(px(&pixels, x, y), COLOR_KEY);

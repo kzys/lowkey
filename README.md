@@ -18,11 +18,10 @@ Working:
   end the digit row, `[`/`]`/`\` end the letter row, Ent ends the home row,
   matching an ANSI keyboard). The home and bottom rows lead with a Ctrl/Shift
   indicator cell instead of a real key (see below), which — like every other
-  row's leading key — keeps 1/Q/A/Z aligned in the same column, and trail
-  with an R2/R1 indicator cell (see below) in the one cell each row has
-  free at the end. Rows shorter than the 14-key letter row run out of real
-  keys before the last column; those cells stay empty rather than fake a
-  key that isn't there.
+  row's leading key — keeps 1/Q/A/Z aligned in the same column. The bottom
+  row's last two cells hold an R2/R1 indicator pair (see below). Rows
+  shorter than the 14-key letter row run out of real keys before the last
+  column; those cells stay empty rather than fake a key that isn't there.
 - `BTN_EAST` (A) inputs the selected key, `BTN_SOUTH` (B) is backspace,
   matching the B-is-back convention on this device's Nintendo-style layout.
   `BTN_NORTH` (Y) is space, `BTN_WEST` (X) and Start both enter, Select
@@ -38,10 +37,11 @@ Working:
 - R1 and R2 are both held chords over the D-pad/hat, so the grid selection
   doesn't move while you're really moving a text cursor: R1 sends arrow
   keys, R2 sends PageUp/PageDown (vertical only). Both auto-repeat like
-  grid navigation does. R2 wins if both happen to be held. Grouped by
-  shoulder-button number with Ctrl/Shift: the grid's R2 indicator cell
-  trails the home row (with Ctrl), R1's trails the bottom row (with
-  Shift), and each lights up while its chord is held.
+  grid navigation does. R2 wins if both happen to be held. The grid's R2
+  and R1 indicator cells sit side by side at the end of the bottom row —
+  R2 then R1, left to right, matching reaching across the shoulder from
+  the far button to the near one — and each lights up while its chord is
+  held.
 - A legend line above the grid spells out what every button currently does.
 - Bottom-anchored overlay sized with `-h`; pad picked by name with `-p` or
   auto-detected as the first device with a `BTN_SOUTH`.

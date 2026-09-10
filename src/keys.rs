@@ -42,10 +42,9 @@ const fn key(label: &'static str, shifted: &'static str, code: Key) -> Cell {
 // same column across all four rows. Rows that fall short of the widest row
 // (the qwerty row, at 14) run out of real keys before the last column;
 // those cells stay empty rather than fake a key that isn't there, except
-// the trailing cell of the home/bottom rows, which holds an R2/R1 chord
-// indicator — grouped by shoulder-button number with the Ctrl/Shift
-// indicator leading the same row (row 2 is the "2" row: L2/Ctrl, R2/page;
-// row 3 is the "1" row: L1/Shift, R1/arrows).
+// the bottom row's last two cells, which hold R2 then R1 — read left to
+// right in that order to match reaching across the shoulder from R2 (the
+// far button) to R1 (the near one).
 pub static KEYS: [[Cell; COLS]; ROWS] = [
     [
         key("`", "~", Key::Grave),
@@ -93,7 +92,7 @@ pub static KEYS: [[Cell; COLS]; ROWS] = [
         key(";", ":", Key::Semicolon),
         key("'", "\"", Key::Apostrophe),
         key("Ent", "Ent", Key::Enter),
-        Cell::R2,
+        Cell::Empty,
     ],
     [
         Cell::Shift,
@@ -108,7 +107,7 @@ pub static KEYS: [[Cell; COLS]; ROWS] = [
         key(".", ">", Key::Dot),
         key("/", "?", Key::Slash),
         Cell::Empty,
-        Cell::Empty,
+        Cell::R2,
         Cell::R1,
     ],
 ];
@@ -196,9 +195,9 @@ mod tests {
     fn rows_shorter_than_the_qwerty_row_end_in_empty_cells() {
         assert!(matches!(KEYS[0][13], Cell::Key(_))); // digit row: full, Esc at the end
         assert!(KEYS[1].iter().all(|c| matches!(c, Cell::Key(_)))); // qwerty row: full
-        assert!(matches!(KEYS[2][13], Cell::R2)); // home row: leading Ctrl, trailing R2
-        assert!(matches!(KEYS[3][11], Cell::Empty)); // bottom row: leading Shift, trailing R1
-        assert!(matches!(KEYS[3][12], Cell::Empty));
+        assert!(matches!(KEYS[2][13], Cell::Empty)); // home row: leading Ctrl, no trailing indicator
+        assert!(matches!(KEYS[3][11], Cell::Empty)); // bottom row: leading Shift, trailing R2 then R1
+        assert!(matches!(KEYS[3][12], Cell::R2));
         assert!(matches!(KEYS[3][13], Cell::R1));
     }
 
