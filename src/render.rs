@@ -51,9 +51,10 @@ fn fill(pixels: &mut [u32], width: i32, height: i32, x: i32, y: i32, w: i32, h: 
 }
 
 /// Renders the full overlay: the legend line, the key grid with `sel_row`/
-/// `sel_col` highlighted (shifted labels if `shift`), the Ctrl/Shift
-/// indicator cells lit up while `ctrl`/`shift` are held, and the
+/// `sel_col` highlighted (shifted labels if `shift`), the Shift/Ctrl/R1/R2
+/// indicator cells lit up while their chord is held, and the
 /// latched-modifier tint in the grid's top-left corner if `latched`.
+#[allow(clippy::too_many_arguments)]
 pub fn draw(
     pixels: &mut [u32],
     width: i32,
@@ -62,6 +63,8 @@ pub fn draw(
     sel_col: usize,
     shift: bool,
     ctrl: bool,
+    r1: bool,
+    r2: bool,
     latched: bool,
     font: &Rasterizer,
 ) {
@@ -101,6 +104,8 @@ pub fn draw(
                 // matters more than where the cursor happens to be.
                 Cell::Shift => ("Shift", if shift { COLOR_LATCHED } else if selected { COLOR_SELECTED } else { COLOR_KEY }),
                 Cell::Ctrl => ("Ctrl", if ctrl { COLOR_LATCHED } else if selected { COLOR_SELECTED } else { COLOR_KEY }),
+                Cell::R1 => ("R1", if r1 { COLOR_LATCHED } else if selected { COLOR_SELECTED } else { COLOR_KEY }),
+                Cell::R2 => ("R2", if r2 { COLOR_LATCHED } else if selected { COLOR_SELECTED } else { COLOR_KEY }),
             };
 
             fill(pixels, width, height, x + 1, y + 1, cw - 2, ch - 2, bg);
@@ -126,10 +131,19 @@ mod tests {
     const WIDTH: i32 = 640;
     const HEIGHT: i32 = DEFAULT_HEIGHT;
 
-    fn render(sel_row: usize, sel_col: usize, shift: bool, ctrl: bool, latched: bool) -> Vec<u32> {
+    #[allow(clippy::too_many_arguments)]
+    fn render(
+        sel_row: usize,
+        sel_col: usize,
+        shift: bool,
+        ctrl: bool,
+        r1: bool,
+        r2: bool,
+        latched: bool,
+    ) -> Vec<u32> {
         let mut pixels = vec![0u32; (WIDTH * HEIGHT) as usize];
         let font = Rasterizer::load(crate::font::DEFAULT_PATH);
-        draw(&mut pixels, WIDTH, HEIGHT, sel_row, sel_col, shift, ctrl, latched, &font);
+        draw(&mut pixels, WIDTH, HEIGHT, sel_row, sel_col, shift, ctrl, r1, r2, latched, &font);
         pixels
     }
 
@@ -141,20 +155,34 @@ mod tests {
     // never an indicator or gap, so it's a safe stand-in for "some key cell".
     #[test]
     fn selected_cell_gets_the_selected_color() {
-        let pixels = render(0, 0, false, false, false);
+        let pixels = render(0, 0, false, false, false, false, false);
         assert_eq!(px(&pixels, 2, LEGEND_H + 2), COLOR_SELECTED);
     }
 
     #[test]
     fn unselected_cell_gets_the_key_color() {
-        let pixels = render(2, 2, false, false, false);
+        let pixels = render(2, 2, false, false, false, false, false);
         assert_eq!(px(&pixels, 2, LEGEND_H + 2), COLOR_KEY);
     }
 
     #[test]
     fn latched_modifier_tints_the_grids_corner() {
-        let pixels = render(2, 2, false, false, true);
+        let pixels = render(2, 2, false, false, false, false, true);
         assert_eq!(px(&pixels, 2, LEGEND_H + 2), COLOR_LATCHED);
+    }
+
+    fn row_h() -> i32 {
+        (DEFAULT_HEIGHT - LEGEND_H) / ROWS as i32
+    }
+
+    // Column 0's pixel offset into a cell; see the analogous helper for the
+    // last column below.
+    fn left_cell_y(row: i32) -> i32 {
+        LEGEND_H + row * row_h() + 2
+    }
+
+    fn right_cell_xy(row: i32) -> (i32, i32) {
+        (13 * (WIDTH / COLS as i32) + 2, LEGEND_H + row * row_h() + 2)
     }
 
     // Row 2 col 0 is the Ctrl indicator, row 3 col 0 is the Shift indicator
@@ -162,31 +190,52 @@ mod tests {
     // cases, so any highlighting comes only from the held chord.
     #[test]
     fn ctrl_indicator_highlights_only_while_ctrl_is_held() {
-        let ch = (DEFAULT_HEIGHT - LEGEND_H) / ROWS as i32;
-        let y = LEGEND_H + 2 * ch + 2;
+        let y = left_cell_y(2);
 
-        let pixels = render(0, 0, false, false, false);
+        let pixels = render(0, 0, false, false, false, false, false);
         assert_eq!(px(&pixels, 2, y), COLOR_KEY);
 
-        let pixels = render(0, 0, false, true, false);
+        let pixels = render(0, 0, false, true, false, false, false);
         assert_eq!(px(&pixels, 2, y), COLOR_LATCHED);
     }
 
     #[test]
     fn shift_indicator_highlights_only_while_shift_is_held() {
-        let ch = (DEFAULT_HEIGHT - LEGEND_H) / ROWS as i32;
-        let y = LEGEND_H + 3 * ch + 2;
+        let y = left_cell_y(3);
 
-        let pixels = render(0, 0, false, false, false);
+        let pixels = render(0, 0, false, false, false, false, false);
         assert_eq!(px(&pixels, 2, y), COLOR_KEY);
 
-        let pixels = render(0, 0, true, false, false);
+        let pixels = render(0, 0, true, false, false, false, false);
         assert_eq!(px(&pixels, 2, y), COLOR_LATCHED);
+    }
+
+    // Row 2 col 13 is the R2 indicator, row 3 col 13 is the R1 indicator.
+    #[test]
+    fn r2_indicator_highlights_only_while_r2_is_held() {
+        let (x, y) = right_cell_xy(2);
+
+        let pixels = render(0, 0, false, false, false, false, false);
+        assert_eq!(px(&pixels, x, y), COLOR_KEY);
+
+        let pixels = render(0, 0, false, false, false, true, false);
+        assert_eq!(px(&pixels, x, y), COLOR_LATCHED);
+    }
+
+    #[test]
+    fn r1_indicator_highlights_only_while_r1_is_held() {
+        let (x, y) = right_cell_xy(3);
+
+        let pixels = render(0, 0, false, false, false, false, false);
+        assert_eq!(px(&pixels, x, y), COLOR_KEY);
+
+        let pixels = render(0, 0, false, false, true, false, false);
+        assert_eq!(px(&pixels, x, y), COLOR_LATCHED);
     }
 
     #[test]
     fn legend_strip_draws_visible_text() {
-        let pixels = render(0, 0, false, false, false);
+        let pixels = render(0, 0, false, false, false, false, false);
         let drawn = (0..WIDTH)
             .flat_map(|x| (0..LEGEND_H).map(move |y| (x, y)))
             .filter(|&(x, y)| px(&pixels, x, y) != COLOR_BG)

@@ -14,15 +14,18 @@ const fn kd(label: &'static str, shifted: &'static str, code: Key) -> KeyDef {
     KeyDef { label, shifted, code }
 }
 
-/// One grid cell: a typeable key, an empty gap, or a Shift/Ctrl indicator.
-/// The indicators aren't typeable — Shift/Ctrl are chorded through the pad's
-/// L/R buttons, not the grid — they just show whether that chord is held.
+/// One grid cell: a typeable key, an empty gap, or a chord indicator (Shift,
+/// Ctrl, R1's arrow-key chord, R2's page chord). Indicators aren't typeable
+/// — their chord is held through a pad button, not the grid — they just
+/// show whether that chord is currently held.
 #[derive(Copy, Clone)]
 pub enum Cell {
     Empty,
     Key(KeyDef),
     Shift,
     Ctrl,
+    R1,
+    R2,
 }
 
 const fn key(label: &'static str, shifted: &'static str, code: Key) -> Cell {
@@ -38,7 +41,11 @@ const fn key(label: &'static str, shifted: &'static str, code: Key) -> Cell {
 // leading the other rows — lines up 1/Q/A/Z (and every column after) in the
 // same column across all four rows. Rows that fall short of the widest row
 // (the qwerty row, at 14) run out of real keys before the last column;
-// those cells stay empty rather than fake a key that isn't there.
+// those cells stay empty rather than fake a key that isn't there, except
+// the trailing cell of the home/bottom rows, which holds an R2/R1 chord
+// indicator — grouped by shoulder-button number with the Ctrl/Shift
+// indicator leading the same row (row 2 is the "2" row: L2/Ctrl, R2/page;
+// row 3 is the "1" row: L1/Shift, R1/arrows).
 pub static KEYS: [[Cell; COLS]; ROWS] = [
     [
         key("`", "~", Key::Grave),
@@ -86,7 +93,7 @@ pub static KEYS: [[Cell; COLS]; ROWS] = [
         key(";", ":", Key::Semicolon),
         key("'", "\"", Key::Apostrophe),
         key("Ent", "Ent", Key::Enter),
-        Cell::Empty,
+        Cell::R2,
     ],
     [
         Cell::Shift,
@@ -102,7 +109,7 @@ pub static KEYS: [[Cell; COLS]; ROWS] = [
         key("/", "?", Key::Slash),
         Cell::Empty,
         Cell::Empty,
-        Cell::Empty,
+        Cell::R1,
     ],
 ];
 
@@ -189,10 +196,10 @@ mod tests {
     fn rows_shorter_than_the_qwerty_row_end_in_empty_cells() {
         assert!(matches!(KEYS[0][13], Cell::Key(_))); // digit row: full, Esc at the end
         assert!(KEYS[1].iter().all(|c| matches!(c, Cell::Key(_)))); // qwerty row: full
-        assert!(matches!(KEYS[2][13], Cell::Empty)); // home row: leading Ctrl, 12 real keys
-        assert!(matches!(KEYS[3][11], Cell::Empty)); // bottom row: leading Shift, 10 real keys
+        assert!(matches!(KEYS[2][13], Cell::R2)); // home row: leading Ctrl, trailing R2
+        assert!(matches!(KEYS[3][11], Cell::Empty)); // bottom row: leading Shift, trailing R1
         assert!(matches!(KEYS[3][12], Cell::Empty));
-        assert!(matches!(KEYS[3][13], Cell::Empty));
+        assert!(matches!(KEYS[3][13], Cell::R1));
     }
 
     #[test]

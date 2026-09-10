@@ -69,6 +69,8 @@ fn handle_pad_event(app: &mut App, pev: PadEvent) {
         PadEvent::Space => typing::tap(&app.uinput, &mut app.keyboard, Key::Space),
         PadEvent::Shift(held) => app.keyboard.set_shift(held),
         PadEvent::Ctrl(held) => app.keyboard.set_ctrl(held),
+        PadEvent::R1(held) => app.keyboard.set_r1(held),
+        PadEvent::R2(held) => app.keyboard.set_r2(held),
         PadEvent::PageUp => {
             typing::tap(&app.uinput, &mut app.keyboard, Key::PageUp);
             app.keyboard.start_repeat(RepeatAction::Tap(Key::PageUp), Instant::now());
@@ -91,10 +93,12 @@ fn draw(app: &mut App) {
     let (sel_row, sel_col) = (app.keyboard.sel_row, app.keyboard.sel_col);
     let shift = app.keyboard.shift;
     let ctrl = app.keyboard.ctrl;
+    let r1 = app.keyboard.r1;
+    let r2 = app.keyboard.r2;
     let latched = app.keyboard.latched();
     // Copy fields (not a borrow of `app`), so `&app.font` below is fine.
     let pixels = unsafe { std::slice::from_raw_parts_mut(app.pixels, app.pixels_len) };
-    render::draw(pixels, width, height, sel_row, sel_col, shift, ctrl, latched, &app.font);
+    render::draw(pixels, width, height, sel_row, sel_col, shift, ctrl, r1, r2, latched, &app.font);
 }
 
 fn commit(app: &mut App) {

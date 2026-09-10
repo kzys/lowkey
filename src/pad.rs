@@ -20,6 +20,10 @@ pub enum PadEvent {
     Ctrl(bool),
     /// An arrow key tap, from a D-pad/hat press while R1 is held.
     Arrow(Key),
+    /// R1's held state changed to this (arrow-key chord).
+    R1(bool),
+    /// R2's held state changed to this (page chord).
+    R2(bool),
     PageUp,
     PageDown,
     Enter,
@@ -73,11 +77,11 @@ pub fn decode(state: &mut PadState, ev: &sys::input_event) -> Option<PadEvent> {
 
     if code == sys::BTN_TR2 {
         state.r2_held = held;
-        return None;
+        return Some(PadEvent::R2(held));
     }
     if code == sys::BTN_TR {
         state.r1_held = held;
-        return None;
+        return Some(PadEvent::R1(held));
     }
     if code == sys::BTN_TL {
         state.tl_held = held;
@@ -262,22 +266,29 @@ mod tests {
     #[test]
     fn r1_and_r2_do_not_hold_ctrl() {
         for code in [sys::BTN_TR, sys::BTN_TR2] {
-            assert_eq!(decode1(&ev(sys::EV_KEY, code, 1)), None);
-            assert_eq!(decode1(&ev(sys::EV_KEY, code, 0)), None);
+            assert!(!matches!(decode1(&ev(sys::EV_KEY, code, 1)), Some(PadEvent::Ctrl(_))));
         }
+    }
+
+    #[test]
+    fn r1_and_r2_report_their_own_held_state() {
+        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_TR, 1)), Some(PadEvent::R1(true)));
+        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_TR, 0)), Some(PadEvent::R1(false)));
+        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_TR2, 1)), Some(PadEvent::R2(true)));
+        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_TR2, 0)), Some(PadEvent::R2(false)));
     }
 
     #[test]
     fn r2_held_turns_vertical_dpad_into_page_turns() {
         let mut state = PadState::new();
-        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TR2, 1)), None);
+        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TR2, 1)), Some(PadEvent::R2(true)));
 
         assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_DPAD_UP, 1)), Some(PadEvent::PageUp));
         assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_DPAD_DOWN, 1)), Some(PadEvent::PageDown));
         // Horizontal directions are unaffected by the R2 chord.
         assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_DPAD_LEFT, 1)), Some(PadEvent::Move(0, -1)));
 
-        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TR2, 0)), None);
+        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TR2, 0)), Some(PadEvent::R2(false)));
         assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_DPAD_UP, 1)), Some(PadEvent::Move(-1, 0)));
     }
 
@@ -294,14 +305,14 @@ mod tests {
     #[test]
     fn r1_held_turns_dpad_into_arrow_keys() {
         let mut state = PadState::new();
-        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TR, 1)), None);
+        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TR, 1)), Some(PadEvent::R1(true)));
 
         assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_DPAD_UP, 1)), Some(PadEvent::Arrow(Key::Up)));
         assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_DPAD_DOWN, 1)), Some(PadEvent::Arrow(Key::Down)));
         assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_DPAD_LEFT, 1)), Some(PadEvent::Arrow(Key::Left)));
         assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_DPAD_RIGHT, 1)), Some(PadEvent::Arrow(Key::Right)));
 
-        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TR, 0)), None);
+        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TR, 0)), Some(PadEvent::R1(false)));
         assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_DPAD_UP, 1)), Some(PadEvent::Move(-1, 0)));
     }
 
