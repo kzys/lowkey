@@ -18,9 +18,11 @@ const fn kd(label: &'static str, shifted: &'static str, code: Key) -> KeyDef {
 // Each row holds the keys a physical QWERTY row holds, including that row's
 // trailing punctuation (e.g. `\` ends the qwerty row, not the home row,
 // matching an ANSI keyboard), so a cell's position is where you'd expect it
-// on a real keyboard. Rows that fall short of the widest row (the qwerty
-// row, at 14) run out of real keys before the last column; those cells stay
-// empty rather than fake a key that isn't there.
+// on a real keyboard. The home row leads with an empty cell (it has no
+// backtick/Tab/Esc of its own) so 1/Q/A/Z land in the same column. Rows that
+// fall short of the widest row (the qwerty row, at 14) run out of real keys
+// before the last column; those cells stay empty rather than fake a key
+// that isn't there.
 pub static KEYS: [[Option<KeyDef>; COLS]; ROWS] = [
     [
         Some(kd("`", "~", Key::Grave)),
@@ -55,6 +57,10 @@ pub static KEYS: [[Option<KeyDef>; COLS]; ROWS] = [
         Some(kd("\\", "|", Key::Backslash)),
     ],
     [
+        // A leading empty cell here, matching the backtick/Tab/Esc that lead
+        // the other rows, lines up 1/Q/A/Z (and every column after) in the
+        // same column across all four rows.
+        None,
         Some(kd("a", "A", Key::A)),
         Some(kd("s", "S", Key::S)),
         Some(kd("d", "D", Key::D)),
@@ -67,7 +73,6 @@ pub static KEYS: [[Option<KeyDef>; COLS]; ROWS] = [
         Some(kd(";", ":", Key::Semicolon)),
         Some(kd("'", "\"", Key::Apostrophe)),
         Some(kd("Ent", "Ent", Key::Enter)),
-        None,
         None,
     ],
     [
@@ -147,7 +152,7 @@ mod tests {
     #[test]
     fn keys_with_no_shift_variant_are_unchanged() {
         assert_eq!(KEYS[1][0].unwrap().shifted, KEYS[1][0].unwrap().label); // Tab
-        assert_eq!(KEYS[2][11].unwrap().shifted, KEYS[2][11].unwrap().label); // Ent
+        assert_eq!(KEYS[2][12].unwrap().shifted, KEYS[2][12].unwrap().label); // Ent
         assert_eq!(KEYS[3][0].unwrap().shifted, KEYS[3][0].unwrap().label); // Esc
     }
 
@@ -155,10 +160,23 @@ mod tests {
     fn rows_shorter_than_the_qwerty_row_end_in_empty_cells() {
         assert!(KEYS[0][13].is_none()); // digit row: 13 real keys
         assert!(KEYS[1].iter().all(Option::is_some)); // qwerty row: full, 14 keys
-        assert!(KEYS[2][12].is_none()); // home row: 12 real keys
+        assert!(KEYS[2][0].is_none()); // home row: leading filler, 12 real keys
         assert!(KEYS[2][13].is_none());
         assert!(KEYS[3][11].is_none()); // bottom row: 11 real keys
         assert!(KEYS[3][12].is_none());
         assert!(KEYS[3][13].is_none());
+    }
+
+    #[test]
+    fn one_two_q_a_z_line_up_in_the_same_columns() {
+        assert_eq!(KEYS[0][0].unwrap().label, "`");
+        assert_eq!(KEYS[1][0].unwrap().label, "Tab");
+        assert!(KEYS[2][0].is_none());
+        assert_eq!(KEYS[3][0].unwrap().label, "Esc");
+
+        assert_eq!(KEYS[0][1].unwrap().label, "1");
+        assert_eq!(KEYS[1][1].unwrap().label, "q");
+        assert_eq!(KEYS[2][1].unwrap().label, "a");
+        assert_eq!(KEYS[3][1].unwrap().label, "z");
     }
 }
