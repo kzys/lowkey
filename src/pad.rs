@@ -18,7 +18,6 @@ pub enum PadEvent {
     Shift(bool),
     /// Ctrl's held state changed to this (R1).
     Ctrl(bool),
-    ToggleAlt,
     PageUp,
     PageDown,
     Enter,
@@ -27,7 +26,7 @@ pub enum PadEvent {
 
 /// Cross-event pad state that a single evdev event can't carry by itself:
 /// which held buttons are currently down, since Shift/Ctrl/R2 all act as
-/// held chords rather than one-shot latches like Alt.
+/// held chords rather than one-shot presses.
 #[derive(Default)]
 pub struct PadState {
     tl_held: bool,
@@ -99,9 +98,7 @@ pub fn decode(state: &mut PadState, ev: &sys::input_event) -> Option<PadEvent> {
         Some(PadEvent::Type)
     } else if code == sys::BTN_WEST {
         Some(PadEvent::Space)
-    } else if code == sys::BTN_NORTH {
-        Some(PadEvent::ToggleAlt)
-    } else if code == sys::BTN_START {
+    } else if code == sys::BTN_NORTH || code == sys::BTN_START {
         Some(PadEvent::Enter)
     } else if code == sys::BTN_SELECT {
         Some(PadEvent::Quit)
@@ -280,8 +277,8 @@ mod tests {
     }
 
     #[test]
-    fn north_start_select_map_to_alt_enter_quit() {
-        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_NORTH, 1)), Some(PadEvent::ToggleAlt));
+    fn north_and_start_both_map_to_enter_select_quits() {
+        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_NORTH, 1)), Some(PadEvent::Enter));
         assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_START, 1)), Some(PadEvent::Enter));
         assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_SELECT, 1)), Some(PadEvent::Quit));
     }

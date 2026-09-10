@@ -18,25 +18,19 @@ pub enum TapStep {
 /// Builds the event sequence for tapping `key` with the given modifiers held:
 /// modifiers down, the key down/sync/up, modifiers up, then a final sync.
 /// Consumers rely on that final sync to see a complete report.
-pub fn tap_sequence(shift: bool, ctrl: bool, alt: bool, key: Key) -> Vec<TapStep> {
-    let mut seq = Vec::with_capacity(8);
+pub fn tap_sequence(shift: bool, ctrl: bool, key: Key) -> Vec<TapStep> {
+    let mut seq = Vec::with_capacity(6);
     if shift {
         seq.push(TapStep::Key(Key::LeftShift, true));
     }
     if ctrl {
         seq.push(TapStep::Key(Key::LeftCtrl, true));
     }
-    if alt {
-        seq.push(TapStep::Key(Key::LeftAlt, true));
-    }
 
     seq.push(TapStep::Key(key, true));
     seq.push(TapStep::Sync);
     seq.push(TapStep::Key(key, false));
 
-    if alt {
-        seq.push(TapStep::Key(Key::LeftAlt, false));
-    }
     if ctrl {
         seq.push(TapStep::Key(Key::LeftCtrl, false));
     }
@@ -63,11 +57,10 @@ fn emit_syn(uinput: &UInputHandle<File>) {
     }
 }
 
-/// Types `key` through uinput with the keyboard's currently latched
-/// modifiers, then clears those one-shot latches.
+/// Types `key` through uinput with the keyboard's currently held modifiers.
 pub fn tap(uinput: &UInputHandle<File>, keyboard: &mut Keyboard, key: Key) {
-    let (shift, ctrl, alt) = keyboard.consume_modifiers();
-    for step in tap_sequence(shift, ctrl, alt, key) {
+    let (shift, ctrl) = keyboard.modifiers();
+    for step in tap_sequence(shift, ctrl, key) {
         match step {
             TapStep::Key(k, pressed) => emit_key(uinput, k, pressed),
             TapStep::Sync => emit_syn(uinput),
@@ -113,7 +106,7 @@ mod tests {
     #[test]
     fn plain_tap_has_no_modifier_steps() {
         assert_eq!(
-            tap_sequence(false, false, false, Key::Q),
+            tap_sequence(false, false, Key::Q),
             vec![TapStep::Key(Key::Q, true), TapStep::Sync, TapStep::Key(Key::Q, false), TapStep::Sync]
         );
     }
@@ -121,7 +114,7 @@ mod tests {
     #[test]
     fn shifted_tap_wraps_key_in_shift_press_and_release() {
         assert_eq!(
-            tap_sequence(true, false, false, Key::Q),
+            tap_sequence(true, false, Key::Q),
             vec![
                 TapStep::Key(Key::LeftShift, true),
                 TapStep::Key(Key::Q, true),
@@ -135,17 +128,15 @@ mod tests {
 
     #[test]
     fn all_modifiers_press_in_order_and_release_in_reverse() {
-        let seq = tap_sequence(true, true, true, Key::A);
+        let seq = tap_sequence(true, true, Key::A);
         assert_eq!(
             seq,
             vec![
                 TapStep::Key(Key::LeftShift, true),
                 TapStep::Key(Key::LeftCtrl, true),
-                TapStep::Key(Key::LeftAlt, true),
                 TapStep::Key(Key::A, true),
                 TapStep::Sync,
                 TapStep::Key(Key::A, false),
-                TapStep::Key(Key::LeftAlt, false),
                 TapStep::Key(Key::LeftCtrl, false),
                 TapStep::Key(Key::LeftShift, false),
                 TapStep::Sync,
@@ -158,8 +149,8 @@ mod tests {
         let mut kb = Keyboard::new();
         kb.set_shift(true);
 
-        let (shift, ctrl, alt) = kb.consume_modifiers();
-        assert_eq!((shift, ctrl, alt), (true, false, false));
+        let (shift, ctrl) = kb.modifiers();
+        assert_eq!((shift, ctrl), (true, false));
         assert!(kb.shift, "shift is a held modifier: a tap must not clear it");
     }
 }

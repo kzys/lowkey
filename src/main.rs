@@ -66,7 +66,6 @@ fn handle_pad_event(app: &mut App, pev: PadEvent) {
         }
         PadEvent::Backspace => typing::tap(&app.uinput, &mut app.keyboard, Key::Backspace),
         PadEvent::Space => typing::tap(&app.uinput, &mut app.keyboard, Key::Space),
-        PadEvent::ToggleAlt => app.keyboard.toggle_alt(),
         PadEvent::Shift(held) => app.keyboard.set_shift(held),
         PadEvent::Ctrl(held) => app.keyboard.set_ctrl(held),
         PadEvent::PageUp => {

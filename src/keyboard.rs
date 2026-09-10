@@ -23,7 +23,6 @@ pub struct Keyboard {
     pub sel_col: usize,
     pub shift: bool,
     pub ctrl: bool,
-    pub alt: bool,
     pub dirty: bool,
     repeat_action: Option<RepeatAction>,
     repeat_at: Instant,
@@ -36,7 +35,6 @@ impl Keyboard {
             sel_col: 0,
             shift: false,
             ctrl: false,
-            alt: false,
             dirty: false,
             repeat_action: None,
             repeat_at: Instant::now(),
@@ -66,26 +64,14 @@ impl Keyboard {
         self.dirty = true;
     }
 
-    pub fn toggle_alt(&mut self) {
-        self.alt = !self.alt;
-        self.dirty = true;
-    }
-
     pub fn latched(&self) -> bool {
-        self.shift || self.ctrl || self.alt
+        self.shift || self.ctrl
     }
 
-    /// Returns the modifiers to apply to a tap. Alt is a one-shot latch (the
-    /// way a phone keyboard behaves) and is cleared here; shift and ctrl are
-    /// real held modifiers, so they stay as-is until their pad buttons are
-    /// released.
-    pub fn consume_modifiers(&mut self) -> (bool, bool, bool) {
-        let mods = (self.shift, self.ctrl, self.alt);
-        if self.alt {
-            self.alt = false;
-            self.dirty = true;
-        }
-        mods
+    /// Shift and Ctrl to apply to a tap: real held modifiers, so this just
+    /// reads their current pad state rather than consuming anything.
+    pub fn modifiers(&self) -> (bool, bool) {
+        (self.shift, self.ctrl)
     }
 
     /// Begins auto-repeat for a just-pressed action.
@@ -148,25 +134,20 @@ mod tests {
     }
 
     #[test]
-    fn consume_modifiers_clears_only_the_one_shot_alt_latch() {
+    fn modifiers_reads_held_state_without_clearing_it() {
         let mut kb = Keyboard::new();
         kb.set_shift(true);
-        kb.toggle_alt();
         kb.dirty = false;
 
-        let mods = kb.consume_modifiers();
-        assert_eq!(mods, (true, false, true));
-        // Shift is a held modifier: it stays set until the pad reports release.
-        assert_eq!((kb.shift, kb.ctrl, kb.alt), (true, false, false));
-        assert!(kb.dirty);
+        assert_eq!(kb.modifiers(), (true, false));
+        assert_eq!((kb.shift, kb.ctrl), (true, false));
+        assert!(!kb.dirty);
     }
 
     #[test]
-    fn consume_modifiers_is_a_noop_with_nothing_latched() {
-        let mut kb = Keyboard::new();
-        kb.dirty = false;
-        assert_eq!(kb.consume_modifiers(), (false, false, false));
-        assert!(!kb.dirty);
+    fn modifiers_are_false_by_default() {
+        let kb = Keyboard::new();
+        assert_eq!(kb.modifiers(), (false, false));
     }
 
     #[test]

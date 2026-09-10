@@ -79,19 +79,18 @@ pub static KEYS: [[KeyDef; COLS]; ROWS] = [
 ];
 
 // Emitted from pad buttons rather than the grid, so they cost no cells.
-pub static EXTRA_KEYS: [Key; 8] = [
+pub static EXTRA_KEYS: [Key; 7] = [
     Key::Backspace,
     Key::Space,
     Key::Enter,
     Key::LeftShift,
     Key::LeftCtrl,
-    Key::LeftAlt,
     Key::PageUp,
     Key::PageDown,
 ];
 
 pub const LEGEND: &str =
-    "A type  B back  Y space  X alt  L shift  R ctrl  Start enter  Select quit";
+    "A type  B back  Y space  X/Start enter  L shift  R ctrl  Select quit";
 
 #[cfg(test)]
 mod tests {
