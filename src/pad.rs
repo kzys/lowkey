@@ -54,7 +54,7 @@ impl PadState {
 /// This driver's BTN_WEST/BTN_NORTH are swapped from the standard
 /// Nintendo-layout convention: physical X reports BTN_WEST and physical Y
 /// reports BTN_NORTH (confirmed with an evdev capture against a real H700
-/// Gamepad), so X carries enter (alongside Start) and Y carries space.
+/// Gamepad), so X carries enter and Y carries space. Start is unmapped.
 /// L1 holds shift, L2 holds ctrl — grouped onto the left shoulder since the
 /// grid shows their indicator cells together on the left. R1 and R2 are
 /// both held chords over the D-pad/hat: R1 turns a direction into an arrow
@@ -110,7 +110,7 @@ pub fn decode(state: &mut PadState, ev: &sys::input_event) -> Option<PadEvent> {
         Some(PadEvent::Type)
     } else if code == sys::BTN_NORTH {
         Some(PadEvent::Space)
-    } else if code == sys::BTN_WEST || code == sys::BTN_START {
+    } else if code == sys::BTN_WEST {
         Some(PadEvent::Enter)
     } else if code == sys::BTN_SELECT {
         Some(PadEvent::Quit)
@@ -326,10 +326,14 @@ mod tests {
     }
 
     #[test]
-    fn west_and_start_both_map_to_enter_select_quits() {
+    fn west_maps_to_enter_select_quits() {
         assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_WEST, 1)), Some(PadEvent::Enter));
-        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_START, 1)), Some(PadEvent::Enter));
         assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_SELECT, 1)), Some(PadEvent::Quit));
+    }
+
+    #[test]
+    fn start_is_unmapped() {
+        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_START, 1)), None);
     }
 
     #[test]

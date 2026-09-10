@@ -24,8 +24,8 @@ Working:
   column; those cells stay empty rather than fake a key that isn't there.
 - `BTN_EAST` (A) inputs the selected key, `BTN_SOUTH` (B) is backspace,
   matching the B-is-back convention on this device's Nintendo-style layout.
-  `BTN_NORTH` (Y) is space, `BTN_WEST` (X) and Start both enter, Select
-  quits. The X/Y codes are swapped from the standard Nintendo-layout
+  `BTN_NORTH` (Y) is space, `BTN_WEST` (X) is enter, Select quits, Start is
+  unmapped. The X/Y codes are swapped from the standard Nintendo-layout
   convention on this device's driver (confirmed with an evdev capture) —
   see the doc comment on `pad::decode`.
 - Shift and Ctrl are held modifiers, like a real keyboard: L1 holds Shift,

@@ -128,7 +128,9 @@ pub static EXTRA_KEYS: [Key; 11] = [
 ];
 
 pub const LEGEND: &str =
-    "A type  B back  Y space  X/Start enter  L shift  R ctrl  Select quit";
+    // L1's narrow "1" glyph visually crowds the following space in Rubik at
+    // this size, so it gets an extra space to keep a visible gap.
+    "L1  shift  L2 ctrl  A type  B back  X enter  Y space  Select quit  R1  arrow  R2 page";
 
 #[cfg(test)]
 mod tests {

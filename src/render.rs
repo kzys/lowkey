@@ -71,11 +71,15 @@ pub fn draw(
     let cw = width / COLS as i32;
     let ch = grid_h / ROWS as i32;
     let key_px = (ch as f32 / 2.0).max(9.0);
-    let legend_px = (LEGEND_H as f32 - 1.0).max(9.0);
+    // Leaves room for descenders: at legend_px this size, a line (ascent +
+    // descent) runs close to LEGEND_H tall, and drawing from baseline alone
+    // (as draw_text does) doesn't clip to LEGEND_H, so a too-large size here
+    // bleeds descenders into the grid's top row.
+    let legend_px = (LEGEND_H as f32 - 4.0).max(8.0);
 
     fill(pixels, width, height, 0, 0, width, height, COLOR_BG);
 
-    draw_text(pixels, width, height, 4, 2, legend_px, LEGEND, COLOR_LEGEND, font);
+    draw_text(pixels, width, height, 4, 1, legend_px, LEGEND, COLOR_LEGEND, font);
 
     for r in 0..ROWS {
         for c in 0..COLS {
