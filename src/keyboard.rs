@@ -7,7 +7,16 @@ use crate::keys::{COLS, KEYS, ROWS};
 const REPEAT_DELAY: Duration = Duration::from_millis(400);
 const REPEAT_INTERVAL: Duration = Duration::from_millis(120);
 
-/// Navigation, modifier-latch and held-direction-repeat state for the grid.
+/// A held-button action that repeats until release: a grid move (applied
+/// directly by tick_repeat) or a key tap (dispatched by the caller, since
+/// typing is I/O this state machine doesn't do itself).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RepeatAction {
+    Move(i32, i32),
+    Tap(Key),
+}
+
+/// Navigation, modifier-latch and held-button-repeat state for the grid.
 /// Pure state machine: no I/O, so it's straightforward to unit test.
 pub struct Keyboard {
     pub sel_row: usize,
@@ -16,7 +25,7 @@ pub struct Keyboard {
     pub ctrl: bool,
     pub alt: bool,
     pub dirty: bool,
-    repeat_dir: Option<(i32, i32)>,
+    repeat_action: Option<RepeatAction>,
     repeat_at: Instant,
 }
 
@@ -29,7 +38,7 @@ impl Keyboard {
             ctrl: false,
             alt: false,
             dirty: false,
-            repeat_dir: None,
+            repeat_action: None,
             repeat_at: Instant::now(),
         }
     }
@@ -44,13 +53,16 @@ impl Keyboard {
         KEYS[self.sel_row][self.sel_col].code
     }
 
-    pub fn toggle_shift(&mut self) {
-        self.shift = !self.shift;
+    /// Sets shift to the pad's currently held state, the way a real keyboard's
+    /// shift key works, rather than toggling.
+    pub fn set_shift(&mut self, held: bool) {
+        self.shift = held;
         self.dirty = true;
     }
 
-    pub fn toggle_ctrl(&mut self) {
-        self.ctrl = !self.ctrl;
+    /// Sets ctrl to the pad's currently held state; see set_shift.
+    pub fn set_ctrl(&mut self, held: bool) {
+        self.ctrl = held;
         self.dirty = true;
     }
 
@@ -63,49 +75,54 @@ impl Keyboard {
         self.shift || self.ctrl || self.alt
     }
 
-    /// Returns the modifiers to apply to a tap, then clears them: modifiers
-    /// are one-shot, the way a phone keyboard behaves.
+    /// Returns the modifiers to apply to a tap. Alt is a one-shot latch (the
+    /// way a phone keyboard behaves) and is cleared here; shift and ctrl are
+    /// real held modifiers, so they stay as-is until their pad buttons are
+    /// released.
     pub fn consume_modifiers(&mut self) -> (bool, bool, bool) {
         let mods = (self.shift, self.ctrl, self.alt);
-        if mods.0 || mods.1 || mods.2 {
-            self.shift = false;
-            self.ctrl = false;
+        if self.alt {
             self.alt = false;
             self.dirty = true;
         }
         mods
     }
 
-    /// Begins auto-repeat for a just-pressed direction.
-    pub fn start_repeat(&mut self, dr: i32, dc: i32, now: Instant) {
-        self.repeat_dir = Some((dr, dc));
+    /// Begins auto-repeat for a just-pressed action.
+    pub fn start_repeat(&mut self, action: RepeatAction, now: Instant) {
+        self.repeat_action = Some(action);
         self.repeat_at = now + REPEAT_DELAY;
     }
 
-    /// Ends auto-repeat on release, regardless of which direction was held.
+    /// Ends auto-repeat on release, regardless of what action was held.
     pub fn stop_repeat(&mut self) {
-        self.repeat_dir = None;
+        self.repeat_action = None;
     }
 
     /// The poll timeout (in milliseconds) needed to wake up for the next
     /// repeat, or -1 (block indefinitely) when nothing is held.
     pub fn repeat_timeout_ms(&self, now: Instant) -> i32 {
-        match self.repeat_dir {
+        match self.repeat_action {
             None => -1,
             Some(_) if self.repeat_at <= now => 0,
             Some(_) => (self.repeat_at - now).as_millis().min(i32::MAX as u128) as i32,
         }
     }
 
-    /// Fires a repeat move if one is due. Returns whether it moved.
-    pub fn tick_repeat(&mut self, now: Instant) -> bool {
-        let Some((dr, dc)) = self.repeat_dir else { return false };
+    /// Fires a repeat if one is due, applying a Move directly (it's grid
+    /// state this struct already owns) and returning it so the caller can
+    /// also react; a Tap is only returned, since typing it is the caller's
+    /// job. None if nothing was due.
+    pub fn tick_repeat(&mut self, now: Instant) -> Option<RepeatAction> {
+        let action = self.repeat_action?;
         if now < self.repeat_at {
-            return false;
+            return None;
         }
-        self.move_sel(dr, dc);
         self.repeat_at = now + REPEAT_INTERVAL;
-        true
+        if let RepeatAction::Move(dr, dc) = action {
+            self.move_sel(dr, dc);
+        }
+        Some(action)
     }
 }
 
@@ -131,15 +148,16 @@ mod tests {
     }
 
     #[test]
-    fn consume_modifiers_clears_one_shot_latches() {
+    fn consume_modifiers_clears_only_the_one_shot_alt_latch() {
         let mut kb = Keyboard::new();
-        kb.toggle_shift();
+        kb.set_shift(true);
         kb.toggle_alt();
         kb.dirty = false;
 
         let mods = kb.consume_modifiers();
         assert_eq!(mods, (true, false, true));
-        assert_eq!((kb.shift, kb.ctrl, kb.alt), (false, false, false));
+        // Shift is a held modifier: it stays set until the pad reports release.
+        assert_eq!((kb.shift, kb.ctrl, kb.alt), (true, false, false));
         assert!(kb.dirty);
     }
 
@@ -155,29 +173,40 @@ mod tests {
     fn repeat_fires_after_delay_then_at_interval() {
         let mut kb = Keyboard::new();
         let t0 = Instant::now();
-        kb.start_repeat(0, 1, t0);
+        kb.start_repeat(RepeatAction::Move(0, 1), t0);
 
         assert_eq!(kb.repeat_timeout_ms(t0), 400);
-        assert!(!kb.tick_repeat(t0 + Duration::from_millis(399)));
+        assert_eq!(kb.tick_repeat(t0 + Duration::from_millis(399)), None);
         assert_eq!(kb.sel_col, 0);
 
         let t1 = t0 + Duration::from_millis(400);
-        assert!(kb.tick_repeat(t1));
+        assert_eq!(kb.tick_repeat(t1), Some(RepeatAction::Move(0, 1)));
         assert_eq!(kb.sel_col, 1);
 
-        assert!(!kb.tick_repeat(t1 + Duration::from_millis(119)));
-        assert!(kb.tick_repeat(t1 + Duration::from_millis(120)));
+        assert_eq!(kb.tick_repeat(t1 + Duration::from_millis(119)), None);
+        assert_eq!(kb.tick_repeat(t1 + Duration::from_millis(120)), Some(RepeatAction::Move(0, 1)));
         assert_eq!(kb.sel_col, 2);
+    }
+
+    #[test]
+    fn repeat_of_a_tap_does_not_move_the_selection() {
+        let mut kb = Keyboard::new();
+        let t0 = Instant::now();
+        kb.start_repeat(RepeatAction::Tap(Key::PageDown), t0);
+
+        let t1 = t0 + Duration::from_millis(400);
+        assert_eq!(kb.tick_repeat(t1), Some(RepeatAction::Tap(Key::PageDown)));
+        assert_eq!((kb.sel_row, kb.sel_col), (0, 0));
     }
 
     #[test]
     fn stop_repeat_cancels_pending_repeats() {
         let mut kb = Keyboard::new();
         let t0 = Instant::now();
-        kb.start_repeat(0, 1, t0);
+        kb.start_repeat(RepeatAction::Move(0, 1), t0);
         kb.stop_repeat();
 
         assert_eq!(kb.repeat_timeout_ms(t0), -1);
-        assert!(!kb.tick_repeat(t0 + Duration::from_secs(10)));
+        assert_eq!(kb.tick_repeat(t0 + Duration::from_secs(10)), None);
     }
 }

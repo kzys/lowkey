@@ -154,12 +154,12 @@ mod tests {
     }
 
     #[test]
-    fn tap_consumes_keyboards_latched_modifiers() {
+    fn tap_reads_keyboards_held_shift_without_clearing_it() {
         let mut kb = Keyboard::new();
-        kb.toggle_shift();
+        kb.set_shift(true);
 
         let (shift, ctrl, alt) = kb.consume_modifiers();
         assert_eq!((shift, ctrl, alt), (true, false, false));
-        assert!(!kb.shift, "tap should clear the one-shot latch");
+        assert!(kb.shift, "shift is a held modifier: a tap must not clear it");
     }
 }

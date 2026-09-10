@@ -1,7 +1,6 @@
-use crate::font8x8::FONT8X8_BASIC;
+use crate::font::Rasterizer;
 use crate::keys::{COLS, KEYS, LEGEND, ROWS};
 
-pub const GLYPH: i32 = 8;
 pub const LEGEND_H: i32 = 18;
 pub const DEFAULT_HEIGHT: i32 = 180 + LEGEND_H;
 
@@ -12,40 +11,27 @@ pub const COLOR_LATCHED: u32 = 0xff8f5f3f;
 pub const COLOR_TEXT: u32 = 0xffffffff;
 pub const COLOR_LEGEND: u32 = 0xff9a9aa5;
 
-fn draw_glyph(pixels: &mut [u32], width: i32, height: i32, x: i32, y: i32, scale: i32, ch: char) {
-    draw_glyph_color(pixels, width, height, x, y, scale, ch, COLOR_TEXT);
+fn text_width(font: &Rasterizer, text: &str, px: f32) -> f32 {
+    text.chars().map(|ch| font.advance(ch, px)).sum()
 }
 
-fn draw_glyph_color(
+/// Draws `text` left-aligned with its top-left corner at `(x, y)`.
+fn draw_text(
     pixels: &mut [u32],
     width: i32,
     height: i32,
     x: i32,
     y: i32,
-    scale: i32,
-    ch: char,
+    px: f32,
+    text: &str,
     color: u32,
+    font: &Rasterizer,
 ) {
-    if !ch.is_ascii() {
-        return;
-    }
-    let rows = &FONT8X8_BASIC[ch as usize];
-
-    for gy in 0..GLYPH {
-        for gx in 0..GLYPH {
-            if rows[gy as usize] & (1 << gx) == 0 {
-                continue;
-            }
-            for py in 0..scale {
-                for px in 0..scale {
-                    let fx = x + gx * scale + px;
-                    let fy = y + gy * scale + py;
-                    if fx >= 0 && fx < width && fy >= 0 && fy < height {
-                        pixels[(fy * width + fx) as usize] = color;
-                    }
-                }
-            }
-        }
+    let baseline_y = y + font.ascent(px).round() as i32;
+    let mut cursor = x as f32;
+    for ch in text.chars() {
+        font.draw(pixels, width, height, cursor.round() as i32, baseline_y, px, ch, color);
+        cursor += font.advance(ch, px);
     }
 }
 
@@ -73,35 +59,33 @@ pub fn draw(
     sel_col: usize,
     shift: bool,
     latched: bool,
+    font: &Rasterizer,
 ) {
     let grid_y0 = LEGEND_H;
     let grid_h = height - LEGEND_H;
     let cw = width / COLS as i32;
     let ch = grid_h / ROWS as i32;
-    let scale = (ch / (GLYPH * 2)).max(1);
+    let key_px = (ch as f32 / 2.5).max(8.0);
+    let legend_px = (LEGEND_H as f32 - 4.0).max(8.0);
 
     fill(pixels, width, height, 0, 0, width, height, COLOR_BG);
 
-    for (i, ch_) in LEGEND.chars().enumerate() {
-        draw_glyph_color(pixels, width, height, 4 + i as i32 * GLYPH, 2, 1, ch_, COLOR_LEGEND);
-    }
+    draw_text(pixels, width, height, 4, 2, legend_px, LEGEND, COLOR_LEGEND, font);
 
     for r in 0..ROWS {
         for c in 0..COLS {
             let key = &KEYS[r][c];
             let label = if shift { key.shifted } else { key.label };
-            let len = label.chars().count() as i32;
             let x = c as i32 * cw;
             let y = grid_y0 + r as i32 * ch;
             let bg = if r == sel_row && c == sel_col { COLOR_SELECTED } else { COLOR_KEY };
 
             fill(pixels, width, height, x + 1, y + 1, cw - 2, ch - 2, bg);
 
-            let tx = x + (cw - len * GLYPH * scale) / 2;
-            let ty = y + (ch - GLYPH * scale) / 2;
-            for (i, ch_) in label.chars().enumerate() {
-                draw_glyph(pixels, width, height, tx + i as i32 * GLYPH * scale, ty, scale, ch_);
-            }
+            let label_w = text_width(font, label, key_px);
+            let tx = x + ((cw as f32 - label_w) / 2.0).round() as i32;
+            let ty = y + ((ch as f32 - key_px) / 2.0).round() as i32;
+            draw_text(pixels, width, height, tx, ty, key_px, label, COLOR_TEXT, font);
         }
     }
 
@@ -121,7 +105,8 @@ mod tests {
 
     fn render(sel_row: usize, sel_col: usize, shift: bool, latched: bool) -> Vec<u32> {
         let mut pixels = vec![0u32; (WIDTH * HEIGHT) as usize];
-        draw(&mut pixels, WIDTH, HEIGHT, sel_row, sel_col, shift, latched);
+        let font = Rasterizer::load(crate::font::DEFAULT_PATH);
+        draw(&mut pixels, WIDTH, HEIGHT, sel_row, sel_col, shift, latched, &font);
         pixels
     }
 

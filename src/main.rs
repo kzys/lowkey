@@ -5,7 +5,7 @@
 // Keystrokes therefore land in whatever the compositor has focused, and no
 // pointer, no compositor-specific IPC and no input-method support is needed.
 
-mod font8x8;
+mod font;
 mod keyboard;
 mod keys;
 mod pad;
@@ -25,7 +25,7 @@ use wayland_client::protocol::{
 use wayland_client::{delegate_noop, Connection, Dispatch, EventQueue, QueueHandle};
 use wayland_protocols_wlr::layer_shell::v1::client::{zwlr_layer_shell_v1, zwlr_layer_surface_v1};
 
-use keyboard::Keyboard;
+use keyboard::{Keyboard, RepeatAction};
 use pad::PadEvent;
 use util::die;
 
@@ -45,23 +45,19 @@ struct App {
 
     uinput: UInputHandle<File>,
     pad: EvdevHandle<File>,
+    pad_state: pad::PadState,
     keyboard: Keyboard,
+    font: font::Rasterizer,
 
     configured: bool,
     running: bool,
-}
-
-impl App {
-    fn pixels_mut(&mut self) -> &mut [u32] {
-        unsafe { std::slice::from_raw_parts_mut(self.pixels, self.pixels_len) }
-    }
 }
 
 fn handle_pad_event(app: &mut App, pev: PadEvent) {
     match pev {
         PadEvent::Move(dr, dc) => {
             app.keyboard.move_sel(dr, dc);
-            app.keyboard.start_repeat(dr, dc, Instant::now());
+            app.keyboard.start_repeat(RepeatAction::Move(dr, dc), Instant::now());
         }
         PadEvent::MoveEnd => app.keyboard.stop_repeat(),
         PadEvent::Type => {
@@ -71,8 +67,16 @@ fn handle_pad_event(app: &mut App, pev: PadEvent) {
         PadEvent::Backspace => typing::tap(&app.uinput, &mut app.keyboard, Key::Backspace),
         PadEvent::Space => typing::tap(&app.uinput, &mut app.keyboard, Key::Space),
         PadEvent::ToggleAlt => app.keyboard.toggle_alt(),
-        PadEvent::ToggleShift => app.keyboard.toggle_shift(),
-        PadEvent::ToggleCtrl => app.keyboard.toggle_ctrl(),
+        PadEvent::Shift(held) => app.keyboard.set_shift(held),
+        PadEvent::Ctrl(held) => app.keyboard.set_ctrl(held),
+        PadEvent::PageUp => {
+            typing::tap(&app.uinput, &mut app.keyboard, Key::PageUp);
+            app.keyboard.start_repeat(RepeatAction::Tap(Key::PageUp), Instant::now());
+        }
+        PadEvent::PageDown => {
+            typing::tap(&app.uinput, &mut app.keyboard, Key::PageDown);
+            app.keyboard.start_repeat(RepeatAction::Tap(Key::PageDown), Instant::now());
+        }
         PadEvent::Enter => typing::tap(&app.uinput, &mut app.keyboard, Key::Enter),
         PadEvent::Quit => app.running = false,
     }
@@ -83,7 +87,9 @@ fn draw(app: &mut App) {
     let (sel_row, sel_col) = (app.keyboard.sel_row, app.keyboard.sel_col);
     let shift = app.keyboard.shift;
     let latched = app.keyboard.latched();
-    render::draw(app.pixels_mut(), width, height, sel_row, sel_col, shift, latched);
+    // Copy fields (not a borrow of `app`), so `&app.font` below is fine.
+    let pixels = unsafe { std::slice::from_raw_parts_mut(app.pixels, app.pixels_len) };
+    render::draw(pixels, width, height, sel_row, sel_col, shift, latched, &app.font);
 }
 
 fn commit(app: &mut App) {
@@ -219,12 +225,14 @@ delegate_noop!(App: ignore zwlr_layer_shell_v1::ZwlrLayerShellV1);
 
 fn usage() -> ! {
     eprintln!(
-        "usage: gpkbd [-h height] [-p pad-name] [--print-height]\n  \
+        "usage: gpkbd [-h height] [-p pad-name] [-f font-path] [--print-height]\n  \
          -h              surface height in pixels (default {})\n  \
          -p              substring of the gamepad's evdev name\n  \
+         -f              path to a TTF/OTF font (default {}, or $GPKBD_FONT)\n  \
          --print-height  print the effective height and exit, for callers\n  \
          \x20                that need to reserve screen space for gpkbd",
-        render::DEFAULT_HEIGHT
+        render::DEFAULT_HEIGHT,
+        font::DEFAULT_PATH,
     );
     std::process::exit(2);
 }
@@ -232,12 +240,15 @@ fn usage() -> ! {
 struct Args {
     height: i32,
     pad_name: Option<String>,
+    font_path: String,
     print_height: bool,
 }
 
 fn parse_args() -> Args {
     let mut height = render::DEFAULT_HEIGHT;
     let mut pad_name = None;
+    let mut font_path =
+        std::env::var("GPKBD_FONT").unwrap_or_else(|_| font::DEFAULT_PATH.to_string());
     let mut print_height = false;
 
     let mut args = std::env::args().skip(1);
@@ -251,11 +262,15 @@ fn parse_args() -> Args {
                 let Some(v) = args.next() else { usage() };
                 pad_name = Some(v);
             }
+            "-f" => {
+                let Some(v) = args.next() else { usage() };
+                font_path = v;
+            }
             "--print-height" => print_height = true,
             _ => usage(),
         }
     }
-    Args { height, pad_name, print_height }
+    Args { height, pad_name, font_path, print_height }
 }
 
 fn main() {
@@ -272,6 +287,7 @@ fn main() {
     }
 
     let uinput = typing::open_uinput();
+    let font = font::Rasterizer::load(&args.font_path);
 
     let conn = Connection::connect_to_env().unwrap_or_else(|e| die(&format!("cannot connect to a Wayland display: {e}")));
     let mut event_queue: EventQueue<App> = conn.new_event_queue();
@@ -293,7 +309,9 @@ fn main() {
         height,
         uinput,
         pad,
+        pad_state: pad::PadState::new(),
         keyboard: Keyboard::new(),
+        font,
         configured: false,
         running: true,
     };
@@ -368,13 +386,15 @@ fn main() {
             }
 
             if fds[1].revents & libc::POLLIN != 0 {
-                for pev in pad::read_pad(&app.pad) {
+                for pev in pad::read_pad(&app.pad, &mut app.pad_state) {
                     handle_pad_event(&mut app, pev);
                 }
             }
         }
 
-        app.keyboard.tick_repeat(Instant::now());
+        if let Some(RepeatAction::Tap(key)) = app.keyboard.tick_repeat(Instant::now()) {
+            typing::tap(&app.uinput, &mut app.keyboard, key);
+        }
 
         if event_queue.dispatch_pending(&mut app).is_err() {
             break;

@@ -79,13 +79,15 @@ pub static KEYS: [[KeyDef; COLS]; ROWS] = [
 ];
 
 // Emitted from pad buttons rather than the grid, so they cost no cells.
-pub static EXTRA_KEYS: [Key; 6] = [
+pub static EXTRA_KEYS: [Key; 8] = [
     Key::Backspace,
     Key::Space,
     Key::Enter,
     Key::LeftShift,
     Key::LeftCtrl,
     Key::LeftAlt,
+    Key::PageUp,
+    Key::PageDown,
 ];
 
 pub const LEGEND: &str =
