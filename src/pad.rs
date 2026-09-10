@@ -45,6 +45,10 @@ impl PadState {
 ///
 /// B is physically the bottom face button on this device's Nintendo-style
 /// layout, so it carries backspace; A confirms and types the selected key.
+/// This driver's BTN_WEST/BTN_NORTH are swapped from the standard
+/// Nintendo-layout convention: physical X reports BTN_WEST and physical Y
+/// reports BTN_NORTH (confirmed with an evdev capture against a real H700
+/// Gamepad), so X carries enter (alongside Start) and Y carries space.
 /// Either left shoulder button holds shift, since the target device has
 /// four shoulder buttons instead of two. R1 holds ctrl the same way; R2 is
 /// reserved as a held chord for D-pad up/down to page the focused surface.
@@ -96,9 +100,9 @@ pub fn decode(state: &mut PadState, ev: &sys::input_event) -> Option<PadEvent> {
         Some(PadEvent::Backspace)
     } else if code == sys::BTN_EAST {
         Some(PadEvent::Type)
-    } else if code == sys::BTN_WEST {
+    } else if code == sys::BTN_NORTH {
         Some(PadEvent::Space)
-    } else if code == sys::BTN_NORTH || code == sys::BTN_START {
+    } else if code == sys::BTN_WEST || code == sys::BTN_START {
         Some(PadEvent::Enter)
     } else if code == sys::BTN_SELECT {
         Some(PadEvent::Quit)
@@ -202,7 +206,9 @@ mod tests {
     fn face_buttons_swap_a_and_b() {
         assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_SOUTH, 1)), Some(PadEvent::Backspace));
         assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_EAST, 1)), Some(PadEvent::Type));
-        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_WEST, 1)), Some(PadEvent::Space));
+        // This driver's BTN_NORTH/BTN_WEST are swapped from the physical Y/X
+        // labels; see decode's doc comment.
+        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_NORTH, 1)), Some(PadEvent::Space));
     }
 
     #[test]
@@ -277,8 +283,8 @@ mod tests {
     }
 
     #[test]
-    fn north_and_start_both_map_to_enter_select_quits() {
-        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_NORTH, 1)), Some(PadEvent::Enter));
+    fn west_and_start_both_map_to_enter_select_quits() {
+        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_WEST, 1)), Some(PadEvent::Enter));
         assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_START, 1)), Some(PadEvent::Enter));
         assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_SELECT, 1)), Some(PadEvent::Quit));
     }

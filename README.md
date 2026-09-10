@@ -14,11 +14,12 @@ Working:
 
 - 10x5 QWERTY-ish grid, D-pad/hat navigation, wraps at the edges and
   auto-repeats on a held direction.
-- `BTN_EAST` inputs the selected key, `BTN_SOUTH` is backspace, `BTN_WEST`
-  is space, `BTN_NORTH` and Start both enter, Select quits. (On this
-  device's Nintendo-style layout, `BTN_SOUTH`/`BTN_EAST`/`BTN_WEST`/
-  `BTN_NORTH` are physically labeled B/A/Y/X, matching the B-is-back
-  convention.)
+- `BTN_EAST` (A) inputs the selected key, `BTN_SOUTH` (B) is backspace,
+  matching the B-is-back convention on this device's Nintendo-style layout.
+  `BTN_NORTH` (Y) is space, `BTN_WEST` (X) and Start both enter, Select
+  quits. The X/Y codes are swapped from the standard Nintendo-layout
+  convention on this device's driver (confirmed with an evdev capture) —
+  see the doc comment on `pad::decode`.
 - Shift and Ctrl are held modifiers, like a real keyboard: either shoulder
   button on the left (L1/L2) holds Shift, R1 holds Ctrl, both for as long as
   they're physically held. Shifted symbol keys show their shifted glyph
