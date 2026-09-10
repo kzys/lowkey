@@ -27,13 +27,16 @@ Working:
   quits. The X/Y codes are swapped from the standard Nintendo-layout
   convention on this device's driver (confirmed with an evdev capture) —
   see the doc comment on `pad::decode`.
-- Shift and Ctrl are held modifiers, like a real keyboard: either shoulder
-  button on the left (L1/L2) holds Shift, R1 holds Ctrl, both for as long as
-  they're physically held. Shifted symbol keys show their shifted glyph
+- Shift and Ctrl are held modifiers, like a real keyboard: L1 holds Shift,
+  L2 holds Ctrl — grouped onto the left shoulder to match the grid, where
+  their indicator cells sit together on the left — for as long as the
+  button is physically held. Shifted symbol keys show their shifted glyph
   live while held, and the grid's Ctrl/Shift cells (not typeable themselves)
   light up while the matching chord is down.
-- R2 is a held chord: while it's down, D-pad/hat up and down send
-  PageUp/PageDown (auto-repeating) instead of moving the grid selection.
+- R1 and R2 are both held chords over the D-pad/hat, so the grid selection
+  doesn't move while you're really moving a text cursor: R1 sends arrow
+  keys, R2 sends PageUp/PageDown (vertical only). Both auto-repeat like
+  grid navigation does. R2 wins if both happen to be held.
 - A legend line above the grid spells out what every button currently does.
 - Bottom-anchored overlay sized with `-h`; pad picked by name with `-p` or
   auto-detected as the first device with a `BTN_SOUTH`.

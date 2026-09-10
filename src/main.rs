@@ -77,6 +77,10 @@ fn handle_pad_event(app: &mut App, pev: PadEvent) {
             typing::tap(&app.uinput, &mut app.keyboard, Key::PageDown);
             app.keyboard.start_repeat(RepeatAction::Tap(Key::PageDown), Instant::now());
         }
+        PadEvent::Arrow(key) => {
+            typing::tap(&app.uinput, &mut app.keyboard, key);
+            app.keyboard.start_repeat(RepeatAction::Tap(key), Instant::now());
+        }
         PadEvent::Enter => typing::tap(&app.uinput, &mut app.keyboard, Key::Enter),
         PadEvent::Quit => app.running = false,
     }

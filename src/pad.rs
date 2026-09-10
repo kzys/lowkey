@@ -14,10 +14,12 @@ pub enum PadEvent {
     Type,
     Backspace,
     Space,
-    /// Shift's held state changed to this (either left shoulder button).
+    /// Shift's held state changed to this (L1).
     Shift(bool),
-    /// Ctrl's held state changed to this (R1).
+    /// Ctrl's held state changed to this (L2).
     Ctrl(bool),
+    /// An arrow key tap, from a D-pad/hat press while R1 is held.
+    Arrow(Key),
     PageUp,
     PageDown,
     Enter,
@@ -25,13 +27,13 @@ pub enum PadEvent {
 }
 
 /// Cross-event pad state that a single evdev event can't carry by itself:
-/// which held buttons are currently down, since Shift/Ctrl/R2 all act as
+/// which held buttons are currently down, since Shift/Ctrl/R1/R2 all act as
 /// held chords rather than one-shot presses.
 #[derive(Default)]
 pub struct PadState {
     tl_held: bool,
     tl2_held: bool,
-    tr_held: bool,
+    r1_held: bool,
     r2_held: bool,
 }
 
@@ -49,9 +51,11 @@ impl PadState {
 /// Nintendo-layout convention: physical X reports BTN_WEST and physical Y
 /// reports BTN_NORTH (confirmed with an evdev capture against a real H700
 /// Gamepad), so X carries enter (alongside Start) and Y carries space.
-/// Either left shoulder button holds shift, since the target device has
-/// four shoulder buttons instead of two. R1 holds ctrl the same way; R2 is
-/// reserved as a held chord for D-pad up/down to page the focused surface.
+/// L1 holds shift, L2 holds ctrl — grouped onto the left shoulder since the
+/// grid shows their indicator cells together on the left. R1 and R2 are
+/// both held chords over the D-pad/hat: R1 turns a direction into an arrow
+/// key (so the grid selection doesn't move while you're just moving a text
+/// cursor), R2 turns up/down into a page turn of the focused surface.
 pub fn decode(state: &mut PadState, ev: &sys::input_event) -> Option<PadEvent> {
     if ev.type_ as i32 == sys::EV_ABS {
         return match ev.code as i32 {
@@ -71,17 +75,17 @@ pub fn decode(state: &mut PadState, ev: &sys::input_event) -> Option<PadEvent> {
         state.r2_held = held;
         return None;
     }
-    if code == sys::BTN_TL || code == sys::BTN_TL2 {
-        if code == sys::BTN_TL {
-            state.tl_held = held;
-        } else {
-            state.tl2_held = held;
-        }
-        return Some(PadEvent::Shift(state.tl_held || state.tl2_held));
-    }
     if code == sys::BTN_TR {
-        state.tr_held = held;
-        return Some(PadEvent::Ctrl(state.tr_held));
+        state.r1_held = held;
+        return None;
+    }
+    if code == sys::BTN_TL {
+        state.tl_held = held;
+        return Some(PadEvent::Shift(state.tl_held));
+    }
+    if code == sys::BTN_TL2 {
+        state.tl2_held = held;
+        return Some(PadEvent::Ctrl(state.tl2_held));
     }
 
     if let Some((dr, dc)) = dpad_dir(code) {
@@ -112,7 +116,8 @@ pub fn decode(state: &mut PadState, ev: &sys::input_event) -> Option<PadEvent> {
 }
 
 /// Turns a direction into a page turn when R2 is held and the direction is
-/// vertical, otherwise a plain grid move.
+/// vertical, an arrow key when R1 is held, otherwise a plain grid move. R2
+/// takes priority over R1 if both happen to be held.
 fn dir_event(state: &PadState, dr: i32, dc: i32) -> PadEvent {
     if state.r2_held && dc == 0 {
         if dr < 0 {
@@ -120,6 +125,16 @@ fn dir_event(state: &PadState, dr: i32, dc: i32) -> PadEvent {
         } else if dr > 0 {
             return PadEvent::PageDown;
         }
+    }
+    if state.r1_held {
+        let key = match (dr, dc) {
+            (d, 0) if d < 0 => Key::Up,
+            (d, 0) if d > 0 => Key::Down,
+            (0, d) if d < 0 => Key::Left,
+            (0, d) if d > 0 => Key::Right,
+            _ => return PadEvent::Move(dr, dc),
+        };
+        return PadEvent::Arrow(key);
     }
     PadEvent::Move(dr, dc)
 }
@@ -233,29 +248,23 @@ mod tests {
     }
 
     #[test]
-    fn either_left_shoulder_button_holds_shift() {
-        for code in [sys::BTN_TL, sys::BTN_TL2] {
-            assert_eq!(decode1(&ev(sys::EV_KEY, code, 1)), Some(PadEvent::Shift(true)));
-            assert_eq!(decode1(&ev(sys::EV_KEY, code, 0)), Some(PadEvent::Shift(false)));
+    fn l1_holds_shift() {
+        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_TL, 1)), Some(PadEvent::Shift(true)));
+        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_TL, 0)), Some(PadEvent::Shift(false)));
+    }
+
+    #[test]
+    fn l2_holds_ctrl() {
+        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_TL2, 1)), Some(PadEvent::Ctrl(true)));
+        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_TL2, 0)), Some(PadEvent::Ctrl(false)));
+    }
+
+    #[test]
+    fn r1_and_r2_do_not_hold_ctrl() {
+        for code in [sys::BTN_TR, sys::BTN_TR2] {
+            assert_eq!(decode1(&ev(sys::EV_KEY, code, 1)), None);
+            assert_eq!(decode1(&ev(sys::EV_KEY, code, 0)), None);
         }
-    }
-
-    #[test]
-    fn shift_stays_held_until_both_left_shoulders_release() {
-        let mut state = PadState::new();
-        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TL, 1)), Some(PadEvent::Shift(true)));
-        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TL2, 1)), Some(PadEvent::Shift(true)));
-        // Releasing just one of the two still-held shoulder buttons keeps shift held.
-        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TL, 0)), Some(PadEvent::Shift(true)));
-        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TL2, 0)), Some(PadEvent::Shift(false)));
-    }
-
-    #[test]
-    fn r1_holds_ctrl_r2_does_not() {
-        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_TR, 1)), Some(PadEvent::Ctrl(true)));
-        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_TR, 0)), Some(PadEvent::Ctrl(false)));
-        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_TR2, 1)), None);
-        assert_eq!(decode1(&ev(sys::EV_KEY, sys::BTN_TR2, 0)), None);
     }
 
     #[test]
@@ -280,6 +289,29 @@ mod tests {
         assert_eq!(decode(&mut state, &ev(sys::EV_ABS, sys::ABS_HAT0Y, -1)), Some(PadEvent::PageUp));
         assert_eq!(decode(&mut state, &ev(sys::EV_ABS, sys::ABS_HAT0Y, 1)), Some(PadEvent::PageDown));
         assert_eq!(decode(&mut state, &ev(sys::EV_ABS, sys::ABS_HAT0X, 1)), Some(PadEvent::Move(0, 1)));
+    }
+
+    #[test]
+    fn r1_held_turns_dpad_into_arrow_keys() {
+        let mut state = PadState::new();
+        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TR, 1)), None);
+
+        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_DPAD_UP, 1)), Some(PadEvent::Arrow(Key::Up)));
+        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_DPAD_DOWN, 1)), Some(PadEvent::Arrow(Key::Down)));
+        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_DPAD_LEFT, 1)), Some(PadEvent::Arrow(Key::Left)));
+        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_DPAD_RIGHT, 1)), Some(PadEvent::Arrow(Key::Right)));
+
+        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TR, 0)), None);
+        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_DPAD_UP, 1)), Some(PadEvent::Move(-1, 0)));
+    }
+
+    #[test]
+    fn r2_takes_priority_over_r1_when_both_held() {
+        let mut state = PadState::new();
+        decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TR, 1));
+        decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TR2, 1));
+
+        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_DPAD_UP, 1)), Some(PadEvent::PageUp));
     }
 
     #[test]
