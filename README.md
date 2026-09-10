@@ -21,28 +21,26 @@ Working:
 - Select to quit.
 - Bottom-anchored overlay sized with `-h`; pad picked by name with `-p` or
   auto-detected as the first device with a `BTN_SOUTH`.
-- Cross-builds for aarch64 against headers/libs pulled off the device.
+- Cross-builds for aarch64, with no runtime dependency on the device's
+  libwayland: `wayland-client`'s pure-Rust backend speaks the wire protocol
+  directly, so there's nothing to pull off the device before linking.
 
 ## Build
 
 ```
-make            # cross-builds ./gpkbd
+make            # cross-builds target/aarch64-unknown-linux-gnu/release/gpkbd
 make install    # scp to the device, killing any running instance first
-make sync-libs  # refresh .sysroot/ from the device
 ```
 
-`CROSS` and `HOST` in the Makefile can be overridden on the command line.
+`HOST` in the Makefile can be overridden on the command line. The target
+needs `rustup target add aarch64-unknown-linux-gnu` and an
+`aarch64-linux-gnu-gcc` on `PATH` for linking (configured in
+`.cargo/config.toml`).
 
 ## Roadmap
 
 Rough order, not commitments:
 
-- **Rewrite in Rust** — under consideration, for memory safety and better
-  error handling than the current `die()`-on-anything C style. `wayland-client`
-  + `wayland-protocols-wlr` cover layer-shell, and `evdev`/`uinput` crates
-  cover the pad and virtual keyboard, so the ecosystem fit is fine; the open
-  question is cross-compiling against the device's aarch64 glibc/libwayland,
-  same constraint the Makefile's `.sysroot` works around today.
 - **L1/L2/R1/R2 as modifiers** — target device is the Anbernic RG35xx, which
   has four shoulder buttons instead of the two (L1/R1) the current mapping
   assumes; map the four to Shift/Ctrl.
