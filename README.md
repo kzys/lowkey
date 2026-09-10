@@ -12,8 +12,13 @@ ROCKNIX handhelds running sway, where a controller is the only input device.
 
 Working:
 
-- 10x5 QWERTY-ish grid, D-pad/hat navigation, wraps at the edges and
-  auto-repeats on a held direction.
+- 14x4 QWERTY grid, D-pad/hat navigation, wraps at the edges and
+  auto-repeats on a held direction. Each row holds a physical QWERTY row's
+  keys at their real position, trailing punctuation included (`-`/`=` end
+  the digit row, `[`/`]`/`\` end the letter row, Ent ends the home row,
+  matching an ANSI keyboard). Rows shorter than the 14-key letter row run
+  out of real keys before the last column; those cells stay empty rather
+  than fake a key that isn't there.
 - `BTN_EAST` (A) inputs the selected key, `BTN_SOUTH` (B) is backspace,
   matching the B-is-back convention on this device's Nintendo-style layout.
   `BTN_NORTH` (Y) is space, `BTN_WEST` (X) and Start both enter, Select

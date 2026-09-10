@@ -47,8 +47,10 @@ impl Keyboard {
         self.dirty = true;
     }
 
-    pub fn selected_key(&self) -> Key {
-        KEYS[self.sel_row][self.sel_col].code
+    /// The key at the current selection, or None if it's an empty cell
+    /// (the grid runs a few cells short of a full rectangle in places).
+    pub fn selected_key(&self) -> Option<Key> {
+        KEYS[self.sel_row][self.sel_col].map(|k| k.code)
     }
 
     /// Sets shift to the pad's currently held state, the way a real keyboard's

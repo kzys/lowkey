@@ -61,8 +61,9 @@ fn handle_pad_event(app: &mut App, pev: PadEvent) {
         }
         PadEvent::MoveEnd => app.keyboard.stop_repeat(),
         PadEvent::Type => {
-            let key = app.keyboard.selected_key();
-            typing::tap(&app.uinput, &mut app.keyboard, key);
+            if let Some(key) = app.keyboard.selected_key() {
+                typing::tap(&app.uinput, &mut app.keyboard, key);
+            }
         }
         PadEvent::Backspace => typing::tap(&app.uinput, &mut app.keyboard, Key::Backspace),
         PadEvent::Space => typing::tap(&app.uinput, &mut app.keyboard, Key::Space),

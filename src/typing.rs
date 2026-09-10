@@ -80,10 +80,8 @@ pub fn open_uinput() -> UInputHandle<File> {
         .set_evbit(EventKind::Key)
         .unwrap_or_else(|e| die(&format!("UI_SET_EVBIT: {e}")));
 
-    for row in &KEYS {
-        for k in row {
-            let _ = uinput.set_keybit(k.code);
-        }
+    for k in KEYS.iter().flatten().flatten() {
+        let _ = uinput.set_keybit(k.code);
     }
     for code in EXTRA_KEYS {
         let _ = uinput.set_keybit(code);

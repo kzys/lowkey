@@ -2,7 +2,9 @@ use crate::font::Rasterizer;
 use crate::keys::{COLS, KEYS, LEGEND, ROWS};
 
 pub const LEGEND_H: i32 = 18;
-pub const DEFAULT_HEIGHT: i32 = 180 + LEGEND_H;
+// 36px/row (unchanged from the 5-row grid); one fewer row now, so this
+// shrinks along with it, handing the freed space back to the terminal.
+pub const DEFAULT_HEIGHT: i32 = 36 * crate::keys::ROWS as i32 + LEGEND_H;
 
 pub const COLOR_BG: u32 = 0xff1d1d1d;
 pub const COLOR_KEY: u32 = 0xff2f2f36;
@@ -74,11 +76,21 @@ pub fn draw(
 
     for r in 0..ROWS {
         for c in 0..COLS {
-            let key = &KEYS[r][c];
-            let label = if shift { key.shifted } else { key.label };
             let x = c as i32 * cw;
             let y = grid_y0 + r as i32 * ch;
-            let bg = if r == sel_row && c == sel_col { COLOR_SELECTED } else { COLOR_KEY };
+            let selected = r == sel_row && c == sel_col;
+
+            let Some(key) = &KEYS[r][c] else {
+                // An empty cell (the grid runs short of a full rectangle in
+                // places) reads as a gap, except when selected: still show
+                // that, so landing here isn't mistaken for a stuck cursor.
+                if selected {
+                    fill(pixels, width, height, x + 1, y + 1, cw - 2, ch - 2, COLOR_SELECTED);
+                }
+                continue;
+            };
+            let label = if shift { key.shifted } else { key.label };
+            let bg = if selected { COLOR_SELECTED } else { COLOR_KEY };
 
             fill(pixels, width, height, x + 1, y + 1, cw - 2, ch - 2, bg);
 
