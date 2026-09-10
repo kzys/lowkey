@@ -19,9 +19,9 @@ Working:
   matching an ANSI keyboard). The home and bottom rows lead with a Ctrl/Shift
   indicator cell instead of a real key (see below), which — like every other
   row's leading key — keeps 1/Q/A/Z aligned in the same column. The bottom
-  row's last two cells hold an R2/R1 indicator pair (see below). Rows
-  shorter than the 14-key letter row run out of real keys before the last
-  column; those cells stay empty rather than fake a key that isn't there.
+  row's last cell holds an R1 indicator (see below). Rows shorter than the
+  14-key letter row run out of real keys before the last column; those cells
+  stay empty rather than fake a key that isn't there.
 - `BTN_EAST` (A) inputs the selected key, `BTN_SOUTH` (B) is backspace,
   matching the B-is-back convention on this device's Nintendo-style layout.
   `BTN_NORTH` (Y) is space, `BTN_WEST` (X) is enter, Select quits, Start is
@@ -34,15 +34,16 @@ Working:
   button is physically held. Shifted symbol keys show their shifted glyph
   live while held, and the grid's Ctrl/Shift cells (not typeable themselves)
   light up while the matching chord is down.
-- R1 and R2 are both held chords over the D-pad/hat, so the grid selection
-  doesn't move while you're really moving a text cursor: R1 sends arrow
-  keys, R2 sends PageUp/PageDown (vertical only). Both auto-repeat like
-  grid navigation does. R2 wins if both happen to be held. The grid's R2
-  and R1 indicator cells sit side by side at the end of the bottom row —
-  R2 then R1, left to right, matching reaching across the shoulder from
-  the far button to the near one — and each lights up while its chord is
-  held.
-- A legend line above the grid spells out what every button currently does.
+- R1 is a held nav chord over the whole right side of the pad, so the grid
+  selection doesn't move while you're really moving a text cursor or paging
+  a surface. The D-pad/hat sends arrow keys; the face buttons switch to
+  paging and Tab/Esc (X: PageUp, Y: Tab, A: Esc, B: PageDown) — drawn as a
+  D-pad/face-button overlay in place of the grid while R1 is held. Both
+  auto-repeat like grid navigation does. The grid's R1 indicator cell sits
+  at the end of the bottom row and lights up while the chord is held.
+- A legend line above the grid spells out what every button currently does,
+  and swaps to R1's own hints (dropping the type/back/enter/space ones)
+  while its nav chord is held.
 - Bottom-anchored overlay sized with `-h`; pad picked by name with `-p` or
   auto-detected as the first device with a `BTN_SOUTH`.
 - Key/legend text is rendered with `fontdue` from a TTF/OTF given with `-f`
@@ -72,7 +73,7 @@ needs `rustup target add aarch64-unknown-linux-gnu` and an
 `foot.ini` and `Terminal.sh` (the EmulationStation Ports launcher that opens
 a shell with gpkbd's overlay) live here because gpkbd's own behavior drives
 their content directly: `foot.ini`'s `scrollback-up-page`/`down-page` bind to
-bare `Page_Up`/`Page_Down` because that's what gpkbd's R2 chord sends, and
+bare `Page_Up`/`Page_Down` because that's what gpkbd's R1 chord sends, and
 `Terminal.sh` hardcodes gpkbd's font path and reserves screen space with
 `--print-height`. `make install-config` deploys both.
 

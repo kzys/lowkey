@@ -1,21 +1,47 @@
 use crate::font::Rasterizer;
-use crate::keys::{Cell, COLS, KEYS, LEGEND, ROWS};
+use crate::keys::{Cell, COLS, KEYS, LEGEND, LEGEND_R1, ROWS};
 
 pub const LEGEND_H: i32 = 14;
 pub const DEFAULT_HEIGHT: i32 = 28 * crate::keys::ROWS as i32 + LEGEND_H;
 
-pub const COLOR_BG: u32 = 0xff1d1d1d;
-pub const COLOR_KEY: u32 = 0xff2f2f36;
-pub const COLOR_SELECTED: u32 = 0xff5f6f9f;
-pub const COLOR_LATCHED: u32 = 0xff8f5f3f;
-pub const COLOR_TEXT: u32 = 0xffffffff;
-pub const COLOR_LEGEND: u32 = 0xff9a9aa5;
+pub const COLOR_BG: u32 = 0xff1a1c22;
+pub const COLOR_KEY: u32 = 0xff262a35;
+pub const COLOR_SELECTED: u32 = 0xff6f7ff0;
+pub const COLOR_SELECTED_TEXT: u32 = 0xff12131a;
+pub const COLOR_TEXT: u32 = 0xffe7e8ee;
+pub const COLOR_LEGEND: u32 = 0xff8a8fa8;
+/// Idle background for the Shift/Ctrl/R1 indicator cells — distinct from a
+/// regular key so an unheld chord doesn't read as a typeable key.
+pub const COLOR_IND: u32 = 0xff1e2029;
+pub const COLOR_IND_BORDER: u32 = 0xff3a3d4a;
+pub const COLOR_IND_TEXT: u32 = 0xff9098b0;
+/// An indicator lit because its chord is currently held (also used for the
+/// latched-modifier corner tint).
+pub const COLOR_LATCHED: u32 = 0xffe0a458;
+pub const COLOR_LATCHED_TEXT: u32 = 0xff1a1c22;
+
+/// The D-pad/face-button overlay shown while R1 is held, replacing the grid
+/// (see `pad::decode` for what each face button sends in this state). Left
+/// diamond mirrors the D-pad; right diamond mirrors X/Y/A/B.
+const NAV_TILES: [(usize, usize, &str); 8] = [
+    (0, 2, "Up"),
+    (1, 1, "Left"),
+    (1, 3, "Right"),
+    (2, 2, "Down"),
+    (0, 11, "PgUp"),
+    (1, 10, "Tab"),
+    (1, 12, "Esc"),
+    (2, 11, "PgDn"),
+];
 
 fn text_width(font: &Rasterizer, text: &str, px: f32) -> f32 {
     text.chars().map(|ch| font.advance(ch, px)).sum()
 }
 
-/// Draws `text` left-aligned with its top-left corner at `(x, y)`.
+/// Draws `text` left-aligned with its top-left corner at `(x, y)`. `bold`
+/// draws each glyph twice, offset by a pixel, to fake a heavier weight the
+/// loaded font file may not have.
+#[allow(clippy::too_many_arguments)]
 fn draw_text(
     pixels: &mut [u32],
     width: i32,
@@ -26,11 +52,16 @@ fn draw_text(
     text: &str,
     color: u32,
     font: &Rasterizer,
+    bold: bool,
 ) {
     let baseline_y = y + font.ascent(px).round() as i32;
     let mut cursor = x as f32;
     for ch in text.chars() {
-        font.draw(pixels, width, height, cursor.round() as i32, baseline_y, px, ch, color);
+        let cx = cursor.round() as i32;
+        font.draw(pixels, width, height, cx, baseline_y, px, ch, color);
+        if bold {
+            font.draw(pixels, width, height, cx + 1, baseline_y, px, ch, color);
+        }
         cursor += font.advance(ch, px);
     }
 }
@@ -48,10 +79,87 @@ fn fill(pixels: &mut [u32], width: i32, height: i32, x: i32, y: i32, w: i32, h: 
     }
 }
 
+/// Fills a cell with a 1px border ring around a (possibly different) fill
+/// color, so indicator cells read distinctly from typeable keys.
+#[allow(clippy::too_many_arguments)]
+fn fill_bordered(
+    pixels: &mut [u32],
+    width: i32,
+    height: i32,
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+    border: u32,
+    fill_color: u32,
+) {
+    fill(pixels, width, height, x, y, w, h, border);
+    fill(pixels, width, height, x + 1, y + 1, w - 2, h - 2, fill_color);
+}
+
+/// Draws `label` centered in the cell at grid position `(x, y)`-`(cw, ch)`.
+#[allow(clippy::too_many_arguments)]
+fn draw_label(
+    pixels: &mut [u32],
+    width: i32,
+    height: i32,
+    x: i32,
+    y: i32,
+    cw: i32,
+    ch: i32,
+    key_px: f32,
+    label: &str,
+    color: u32,
+    bold: bool,
+    font: &Rasterizer,
+) {
+    let label_w = text_width(font, label, key_px);
+    let tx = x + ((cw as f32 - label_w) / 2.0).round() as i32;
+    let ty = y + ((ch as f32 - key_px) / 2.0).round() as i32;
+    draw_text(pixels, width, height, tx, ty, key_px, label, color, font, bold);
+}
+
+/// Draws a Shift/Ctrl/R1 indicator cell: bordered and dim while idle, solid
+/// amber with bold dark text while its chord is held.
+#[allow(clippy::too_many_arguments)]
+fn draw_indicator(
+    pixels: &mut [u32],
+    width: i32,
+    height: i32,
+    x: i32,
+    y: i32,
+    cw: i32,
+    ch: i32,
+    key_px: f32,
+    label: &str,
+    held: bool,
+    font: &Rasterizer,
+) {
+    let (border, fill_color, text_color) =
+        if held { (COLOR_LATCHED, COLOR_LATCHED, COLOR_LATCHED_TEXT) } else { (COLOR_IND_BORDER, COLOR_IND, COLOR_IND_TEXT) };
+    fill_bordered(pixels, width, height, x + 1, y + 1, cw - 2, ch - 2, border, fill_color);
+    draw_label(pixels, width, height, x, y, cw, ch, key_px, label, text_color, held, font);
+}
+
+/// Draws the D-pad/face-button overlay in place of the (now dimmed) keys it
+/// sits over.
+fn draw_nav_overlay(pixels: &mut [u32], width: i32, height: i32, grid_y0: i32, cw: i32, ch: i32, font: &Rasterizer) {
+    // Smaller than a regular key's text: tiles carry longer labels ("Right",
+    // "PgDn") than a single keycap glyph.
+    let nav_px = (ch as f32 * 0.32).max(7.0);
+    for &(row, col, label) in NAV_TILES.iter() {
+        let x = col as i32 * cw;
+        let y = grid_y0 + row as i32 * ch;
+        fill(pixels, width, height, x + 1, y + 1, cw - 2, ch - 2, COLOR_KEY);
+        draw_label(pixels, width, height, x, y, cw, ch, nav_px, label, COLOR_TEXT, false, font);
+    }
+}
+
 /// Renders the full overlay: the legend line, the key grid with `sel_row`/
-/// `sel_col` highlighted (shifted labels if `shift`), the Shift/Ctrl/R1/R2
-/// indicator cells lit up while their chord is held, and the
-/// latched-modifier tint in the grid's top-left corner if `latched`.
+/// `sel_col` highlighted (shifted labels if `shift`), the Shift/Ctrl/R1
+/// indicator cells lit up while their chord is held, the latched-modifier
+/// tint in the grid's top-left corner if `latched`, and — while R1 is held —
+/// the nav overlay in place of the (dimmed) typeable keys.
 #[allow(clippy::too_many_arguments)]
 pub fn draw(
     pixels: &mut [u32],
@@ -62,7 +170,6 @@ pub fn draw(
     shift: bool,
     ctrl: bool,
     r1: bool,
-    r2: bool,
     latched: bool,
     font: &Rasterizer,
 ) {
@@ -79,15 +186,18 @@ pub fn draw(
 
     fill(pixels, width, height, 0, 0, width, height, COLOR_BG);
 
-    draw_text(pixels, width, height, 4, 1, legend_px, LEGEND, COLOR_LEGEND, font);
+    let legend = if r1 { LEGEND_R1 } else { LEGEND };
+    draw_text(pixels, width, height, 4, 1, legend_px, legend, COLOR_LEGEND, font, false);
 
     for r in 0..ROWS {
         for c in 0..COLS {
             let x = c as i32 * cw;
             let y = grid_y0 + r as i32 * ch;
-            let selected = r == sel_row && c == sel_col;
+            // Selection is meaningless while R1's nav overlay is up: the
+            // grid isn't being typed into, it's sending arrows/paging.
+            let selected = !r1 && r == sel_row && c == sel_col;
 
-            let (label, bg) = match &KEYS[r][c] {
+            match &KEYS[r][c] {
                 Cell::Empty => {
                     // An empty cell (the grid runs short of a full rectangle
                     // in places) reads as a gap, except when selected: still
@@ -96,27 +206,28 @@ pub fn draw(
                     if selected {
                         fill(pixels, width, height, x + 1, y + 1, cw - 2, ch - 2, COLOR_SELECTED);
                     }
-                    continue;
                 }
                 Cell::Key(key) => {
+                    // Dimmed to nothing while R1's nav overlay is up; some of
+                    // these cells get a nav tile drawn over them below.
+                    if r1 {
+                        continue;
+                    }
                     let label = if shift { key.shifted } else { key.label };
-                    (label, if selected { COLOR_SELECTED } else { COLOR_KEY })
+                    let (bg, text_color, bold) =
+                        if selected { (COLOR_SELECTED, COLOR_SELECTED_TEXT, true) } else { (COLOR_KEY, COLOR_TEXT, false) };
+                    fill(pixels, width, height, x + 1, y + 1, cw - 2, ch - 2, bg);
+                    draw_label(pixels, width, height, x, y, cw, ch, key_px, label, text_color, bold, font);
                 }
-                // Held state wins over selection: knowing the chord is down
-                // matters more than where the cursor happens to be.
-                Cell::Shift => ("Shift", if shift { COLOR_LATCHED } else if selected { COLOR_SELECTED } else { COLOR_KEY }),
-                Cell::Ctrl => ("Ctrl", if ctrl { COLOR_LATCHED } else if selected { COLOR_SELECTED } else { COLOR_KEY }),
-                Cell::R1 => ("R1", if r1 { COLOR_LATCHED } else if selected { COLOR_SELECTED } else { COLOR_KEY }),
-                Cell::R2 => ("R2", if r2 { COLOR_LATCHED } else if selected { COLOR_SELECTED } else { COLOR_KEY }),
-            };
-
-            fill(pixels, width, height, x + 1, y + 1, cw - 2, ch - 2, bg);
-
-            let label_w = text_width(font, label, key_px);
-            let tx = x + ((cw as f32 - label_w) / 2.0).round() as i32;
-            let ty = y + ((ch as f32 - key_px) / 2.0).round() as i32;
-            draw_text(pixels, width, height, tx, ty, key_px, label, COLOR_TEXT, font);
+                Cell::Shift => draw_indicator(pixels, width, height, x, y, cw, ch, key_px, "Shift", shift, font),
+                Cell::Ctrl => draw_indicator(pixels, width, height, x, y, cw, ch, key_px, "Ctrl", ctrl, font),
+                Cell::R1 => draw_indicator(pixels, width, height, x, y, cw, ch, key_px, "R1", r1, font),
+            }
         }
+    }
+
+    if r1 {
+        draw_nav_overlay(pixels, width, height, grid_y0, cw, ch, font);
     }
 
     // A latched modifier tints the top-left corner of the grid, which is
@@ -134,18 +245,10 @@ mod tests {
     const HEIGHT: i32 = DEFAULT_HEIGHT;
 
     #[allow(clippy::too_many_arguments)]
-    fn render(
-        sel_row: usize,
-        sel_col: usize,
-        shift: bool,
-        ctrl: bool,
-        r1: bool,
-        r2: bool,
-        latched: bool,
-    ) -> Vec<u32> {
+    fn render(sel_row: usize, sel_col: usize, shift: bool, ctrl: bool, r1: bool, latched: bool) -> Vec<u32> {
         let mut pixels = vec![0u32; (WIDTH * HEIGHT) as usize];
         let font = Rasterizer::load(crate::font::DEFAULT_PATH);
-        draw(&mut pixels, WIDTH, HEIGHT, sel_row, sel_col, shift, ctrl, r1, r2, latched, &font);
+        draw(&mut pixels, WIDTH, HEIGHT, sel_row, sel_col, shift, ctrl, r1, latched, &font);
         pixels
     }
 
@@ -157,19 +260,19 @@ mod tests {
     // never an indicator or gap, so it's a safe stand-in for "some key cell".
     #[test]
     fn selected_cell_gets_the_selected_color() {
-        let pixels = render(0, 0, false, false, false, false, false);
+        let pixels = render(0, 0, false, false, false, false);
         assert_eq!(px(&pixels, 2, LEGEND_H + 2), COLOR_SELECTED);
     }
 
     #[test]
     fn unselected_cell_gets_the_key_color() {
-        let pixels = render(2, 2, false, false, false, false, false);
+        let pixels = render(2, 2, false, false, false, false);
         assert_eq!(px(&pixels, 2, LEGEND_H + 2), COLOR_KEY);
     }
 
     #[test]
     fn latched_modifier_tints_the_grids_corner() {
-        let pixels = render(2, 2, false, false, false, false, true);
+        let pixels = render(2, 2, false, false, false, true);
         assert_eq!(px(&pixels, 2, LEGEND_H + 2), COLOR_LATCHED);
     }
 
@@ -194,10 +297,10 @@ mod tests {
     fn ctrl_indicator_highlights_only_while_ctrl_is_held() {
         let y = left_cell_y(2);
 
-        let pixels = render(0, 0, false, false, false, false, false);
-        assert_eq!(px(&pixels, 2, y), COLOR_KEY);
+        let pixels = render(0, 0, false, false, false, false);
+        assert_eq!(px(&pixels, 2, y), COLOR_IND);
 
-        let pixels = render(0, 0, false, true, false, false, false);
+        let pixels = render(0, 0, false, true, false, false);
         assert_eq!(px(&pixels, 2, y), COLOR_LATCHED);
     }
 
@@ -205,40 +308,46 @@ mod tests {
     fn shift_indicator_highlights_only_while_shift_is_held() {
         let y = left_cell_y(3);
 
-        let pixels = render(0, 0, false, false, false, false, false);
-        assert_eq!(px(&pixels, 2, y), COLOR_KEY);
+        let pixels = render(0, 0, false, false, false, false);
+        assert_eq!(px(&pixels, 2, y), COLOR_IND);
 
-        let pixels = render(0, 0, true, false, false, false, false);
+        let pixels = render(0, 0, true, false, false, false);
         assert_eq!(px(&pixels, 2, y), COLOR_LATCHED);
     }
 
-    // Bottom row col 12 is the R2 indicator, col 13 is R1 (see keys::KEYS):
-    // left to right, R2 then R1, matching reaching across the shoulder.
-    #[test]
-    fn r2_indicator_highlights_only_while_r2_is_held() {
-        let (x, y) = cell_xy(3, 12);
-
-        let pixels = render(0, 0, false, false, false, false, false);
-        assert_eq!(px(&pixels, x, y), COLOR_KEY);
-
-        let pixels = render(0, 0, false, false, false, true, false);
-        assert_eq!(px(&pixels, x, y), COLOR_LATCHED);
-    }
-
+    // Bottom row col 13 is the R1 indicator (see keys::KEYS).
     #[test]
     fn r1_indicator_highlights_only_while_r1_is_held() {
         let (x, y) = cell_xy(3, 13);
 
-        let pixels = render(0, 0, false, false, false, false, false);
-        assert_eq!(px(&pixels, x, y), COLOR_KEY);
+        let pixels = render(0, 0, false, false, false, false);
+        assert_eq!(px(&pixels, x, y), COLOR_IND);
 
-        let pixels = render(0, 0, false, false, true, false, false);
+        let pixels = render(0, 0, false, false, true, false);
         assert_eq!(px(&pixels, x, y), COLOR_LATCHED);
+    }
+
+    // Row 0 col 0 ('`') is a typeable key that R1's nav overlay dims to the
+    // plain background, since it isn't one of the eight tiles reused for
+    // arrows/paging.
+    #[test]
+    fn r1_held_dims_ordinary_keys_to_the_background() {
+        let pixels = render(0, 0, false, false, true, false);
+        assert_eq!(px(&pixels, 2, LEGEND_H + 2), COLOR_BG);
+    }
+
+    // Row 1 col 1 ('q' normally) becomes the "Left" arrow tile while R1 is
+    // held, styled like a plain key rather than an indicator.
+    #[test]
+    fn r1_held_draws_a_nav_tile_over_the_dimmed_key_beneath_it() {
+        let (x, y) = cell_xy(1, 1);
+        let pixels = render(0, 0, false, false, true, false);
+        assert_eq!(px(&pixels, x, y), COLOR_KEY);
     }
 
     #[test]
     fn legend_strip_draws_visible_text() {
-        let pixels = render(0, 0, false, false, false, false, false);
+        let pixels = render(0, 0, false, false, false, false);
         let drawn = (0..WIDTH)
             .flat_map(|x| (0..LEGEND_H).map(move |y| (x, y)))
             .filter(|&(x, y)| px(&pixels, x, y) != COLOR_BG)

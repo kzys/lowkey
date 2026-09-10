@@ -23,12 +23,10 @@ pub struct Keyboard {
     pub sel_col: usize,
     pub shift: bool,
     pub ctrl: bool,
-    /// Whether R1 (arrow-key chord) is currently held, for the grid's R1
-    /// indicator cell. Not a typing modifier, unlike shift/ctrl.
+    /// Whether R1 (nav chord) is currently held, for the grid's R1
+    /// indicator cell and its overlay. Not a typing modifier, unlike
+    /// shift/ctrl.
     pub r1: bool,
-    /// Whether R2 (page chord) is currently held, for the grid's R2
-    /// indicator cell. Not a typing modifier, unlike shift/ctrl.
-    pub r2: bool,
     pub dirty: bool,
     repeat_action: Option<RepeatAction>,
     repeat_at: Instant,
@@ -42,7 +40,6 @@ impl Keyboard {
             shift: false,
             ctrl: false,
             r1: false,
-            r2: false,
             dirty: false,
             repeat_action: None,
             repeat_at: Instant::now(),
@@ -77,15 +74,9 @@ impl Keyboard {
         self.dirty = true;
     }
 
-    /// Sets R1's held state, for the grid's R1 indicator cell.
+    /// Sets R1's held state, for the grid's R1 indicator cell and overlay.
     pub fn set_r1(&mut self, held: bool) {
         self.r1 = held;
-        self.dirty = true;
-    }
-
-    /// Sets R2's held state, for the grid's R2 indicator cell.
-    pub fn set_r2(&mut self, held: bool) {
-        self.r2 = held;
         self.dirty = true;
     }
 

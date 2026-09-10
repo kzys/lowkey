@@ -15,9 +15,9 @@ const fn kd(label: &'static str, shifted: &'static str, code: Key) -> KeyDef {
 }
 
 /// One grid cell: a typeable key, an empty gap, or a chord indicator (Shift,
-/// Ctrl, R1's arrow-key chord, R2's page chord). Indicators aren't typeable
-/// — their chord is held through a pad button, not the grid — they just
-/// show whether that chord is currently held.
+/// Ctrl, R1's nav chord). Indicators aren't typeable — their chord is held
+/// through a pad button, not the grid — they just show whether that chord is
+/// currently held.
 #[derive(Copy, Clone)]
 pub enum Cell {
     Empty,
@@ -25,7 +25,6 @@ pub enum Cell {
     Shift,
     Ctrl,
     R1,
-    R2,
 }
 
 const fn key(label: &'static str, shifted: &'static str, code: Key) -> Cell {
@@ -41,10 +40,8 @@ const fn key(label: &'static str, shifted: &'static str, code: Key) -> Cell {
 // leading the other rows — lines up 1/Q/A/Z (and every column after) in the
 // same column across all four rows. Rows that fall short of the widest row
 // (the qwerty row, at 14) run out of real keys before the last column;
-// those cells stay empty rather than fake a key that isn't there, except
-// the bottom row's last two cells, which hold R2 then R1 — read left to
-// right in that order to match reaching across the shoulder from R2 (the
-// far button) to R1 (the near one).
+// those cells stay empty rather than fake a key that isn't there, except the
+// bottom row's last cell, which holds R1.
 pub static KEYS: [[Cell; COLS]; ROWS] = [
     [
         key("`", "~", Key::Grave),
@@ -107,7 +104,7 @@ pub static KEYS: [[Cell; COLS]; ROWS] = [
         key(".", ">", Key::Dot),
         key("/", "?", Key::Slash),
         Cell::Empty,
-        Cell::R2,
+        Cell::Empty,
         Cell::R1,
     ],
 ];
@@ -130,7 +127,11 @@ pub static EXTRA_KEYS: [Key; 11] = [
 pub const LEGEND: &str =
     // L1's narrow "1" glyph visually crowds the following space in Rubik at
     // this size, so it gets an extra space to keep a visible gap.
-    "L1  shift  L2 ctrl  A type  B back  X enter  Y space  Select quit  R1  arrow  R2 page";
+    "L1  shift \u{b7} L2 ctrl \u{b7} A type \u{b7} B back \u{b7} X enter \u{b7} Y space \u{b7} Select quit \u{b7} R1 nav";
+
+/// Legend shown while R1's nav chord is held: A/B/X/Y stop meaning
+/// type/back/enter/space (see `pad::decode`), so their hints drop out.
+pub const LEGEND_R1: &str = "L1  shift \u{b7} L2 ctrl \u{b7} Select quit \u{b7} R1 nav";
 
 #[cfg(test)]
 mod tests {
@@ -198,8 +199,8 @@ mod tests {
         assert!(matches!(KEYS[0][13], Cell::Key(_))); // digit row: full, Esc at the end
         assert!(KEYS[1].iter().all(|c| matches!(c, Cell::Key(_)))); // qwerty row: full
         assert!(matches!(KEYS[2][13], Cell::Empty)); // home row: leading Ctrl, no trailing indicator
-        assert!(matches!(KEYS[3][11], Cell::Empty)); // bottom row: leading Shift, trailing R2 then R1
-        assert!(matches!(KEYS[3][12], Cell::R2));
+        assert!(matches!(KEYS[3][11], Cell::Empty)); // bottom row: leading Shift, trailing R1
+        assert!(matches!(KEYS[3][12], Cell::Empty));
         assert!(matches!(KEYS[3][13], Cell::R1));
     }
 
