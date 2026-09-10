@@ -12,13 +12,17 @@ ROCKNIX handhelds running sway, where a controller is the only input device.
 
 Working:
 
-- 10x5 QWERTY-ish grid, D-pad/hat navigation, wraps at the edges.
-- `BTN_SOUTH` inputs the selected key, `BTN_EAST` is backspace, `BTN_WEST`
-  is space, Start is enter. (On this device's Nintendo-style layout,
-  `BTN_SOUTH`/`BTN_EAST` are physically labeled B/A, not A/B.)
-- One-shot Shift/Ctrl/Alt latches (`BTN_NORTH`, L1, R1), cleared after the
-  next tap.
-- Select to quit.
+- 10x5 QWERTY-ish grid, D-pad/hat navigation, wraps at the edges and
+  auto-repeats on a held direction.
+- `BTN_EAST` inputs the selected key, `BTN_SOUTH` is backspace, `BTN_WEST`
+  is space, Start is enter, Select quits. (On this device's Nintendo-style
+  layout, `BTN_SOUTH`/`BTN_EAST` are physically labeled B/A, matching the
+  B-is-back convention.)
+- One-shot Shift/Ctrl/Alt latches: either shoulder button on the left
+  (L1/L2) is Shift, either on the right (R1/R2) is Ctrl, `BTN_NORTH` (X)
+  is Alt. Latches clear after the next tap, and shifted symbol keys show
+  their shifted glyph while latched.
+- A legend line above the grid spells out what every button currently does.
 - Bottom-anchored overlay sized with `-h`; pad picked by name with `-p` or
   auto-detected as the first device with a `BTN_SOUTH`.
 - Cross-builds for aarch64, with no runtime dependency on the device's
@@ -39,16 +43,4 @@ needs `rustup target add aarch64-unknown-linux-gnu` and an
 
 ## Roadmap
 
-Rough order, not commitments:
-
-- **L1/L2/R1/R2 as modifiers** — target device is the Anbernic RG35xx, which
-  has four shoulder buttons instead of the two (L1/R1) the current mapping
-  assumes; map the four to Shift/Ctrl.
-- **Swap A/B** — bind backspace to `BTN_SOUTH` and input to `BTN_EAST`,
-  matching this device's B-is-back convention (`BTN_SOUTH` is physically B).
-- **Shifted labels** — the grid shows the unshifted key even when Shift is
-  latched, so there's no way to see what a symbol key will actually type.
-- **Held-direction repeat** — navigation only moves on the initial press;
-  holding a direction should auto-repeat like it does on a real keyboard.
-- **On-screen button legend** — a persistent hint for what A/B/X/Y/L1/R1/
-  Start/Select currently do, since none of it is discoverable from the grid.
+Nothing queued right now.

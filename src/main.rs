@@ -11,7 +11,7 @@ use std::ffi::CString;
 use std::fs::{File, OpenOptions};
 use std::os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::fs::OpenOptionsExt;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use input_linux::sys;
 use input_linux::{
@@ -28,84 +28,93 @@ use font8x8::FONT8X8_BASIC;
 const COLS: usize = 10;
 const ROWS: usize = 5;
 const GLYPH: i32 = 8;
+const LEGEND_H: i32 = 18;
+const DEFAULT_HEIGHT: i32 = 180 + LEGEND_H;
+
+const REPEAT_DELAY: Duration = Duration::from_millis(400);
+const REPEAT_INTERVAL: Duration = Duration::from_millis(120);
 
 const COLOR_BG: u32 = 0xff1d1d1d;
 const COLOR_KEY: u32 = 0xff2f2f36;
 const COLOR_SELECTED: u32 = 0xff5f6f9f;
 const COLOR_LATCHED: u32 = 0xff8f5f3f;
 const COLOR_TEXT: u32 = 0xffffffff;
+const COLOR_LEGEND: u32 = 0xff9a9aa5;
+
+const LEGEND: &str = "A type  B back  Y space  X alt  L shift  R ctrl  Start enter  Select quit";
 
 #[derive(Copy, Clone)]
 struct KeyDef {
     label: &'static str,
+    shifted: &'static str,
     code: Key,
 }
 
-const fn kd(label: &'static str, code: Key) -> KeyDef {
-    KeyDef { label, code }
+const fn kd(label: &'static str, shifted: &'static str, code: Key) -> KeyDef {
+    KeyDef { label, shifted, code }
 }
 
 // The grid is uniform, which keeps both hit testing and navigation trivial.
 static KEYS: [[KeyDef; COLS]; ROWS] = [
     [
-        kd("1", Key::Num1),
-        kd("2", Key::Num2),
-        kd("3", Key::Num3),
-        kd("4", Key::Num4),
-        kd("5", Key::Num5),
-        kd("6", Key::Num6),
-        kd("7", Key::Num7),
-        kd("8", Key::Num8),
-        kd("9", Key::Num9),
-        kd("0", Key::Num0),
+        kd("1", "!", Key::Num1),
+        kd("2", "@", Key::Num2),
+        kd("3", "#", Key::Num3),
+        kd("4", "$", Key::Num4),
+        kd("5", "%", Key::Num5),
+        kd("6", "^", Key::Num6),
+        kd("7", "&", Key::Num7),
+        kd("8", "*", Key::Num8),
+        kd("9", "(", Key::Num9),
+        kd("0", ")", Key::Num0),
     ],
     [
-        kd("q", Key::Q),
-        kd("w", Key::W),
-        kd("e", Key::E),
-        kd("r", Key::R),
-        kd("t", Key::T),
-        kd("y", Key::Y),
-        kd("u", Key::U),
-        kd("i", Key::I),
-        kd("o", Key::O),
-        kd("p", Key::P),
+        kd("q", "Q", Key::Q),
+        kd("w", "W", Key::W),
+        kd("e", "E", Key::E),
+        kd("r", "R", Key::R),
+        kd("t", "T", Key::T),
+        kd("y", "Y", Key::Y),
+        kd("u", "U", Key::U),
+        kd("i", "I", Key::I),
+        kd("o", "O", Key::O),
+        kd("p", "P", Key::P),
     ],
     [
-        kd("a", Key::A),
-        kd("s", Key::S),
-        kd("d", Key::D),
-        kd("f", Key::F),
-        kd("g", Key::G),
-        kd("h", Key::H),
-        kd("j", Key::J),
-        kd("k", Key::K),
-        kd("l", Key::L),
-        kd(";", Key::Semicolon),
+        kd("a", "A", Key::A),
+        kd("s", "S", Key::S),
+        kd("d", "D", Key::D),
+        kd("f", "F", Key::F),
+        kd("g", "G", Key::G),
+        kd("h", "H", Key::H),
+        kd("j", "J", Key::J),
+        kd("k", "K", Key::K),
+        kd("l", "L", Key::L),
+        kd(";", ":", Key::Semicolon),
     ],
     [
-        kd("z", Key::Z),
-        kd("x", Key::X),
-        kd("c", Key::C),
-        kd("v", Key::V),
-        kd("b", Key::B),
-        kd("n", Key::N),
-        kd("m", Key::M),
-        kd(",", Key::Comma),
-        kd(".", Key::Dot),
-        kd("/", Key::Slash),
+        kd("z", "Z", Key::Z),
+        kd("x", "X", Key::X),
+        kd("c", "C", Key::C),
+        kd("v", "V", Key::V),
+        kd("b", "B", Key::B),
+        kd("n", "N", Key::N),
+        kd("m", "M", Key::M),
+        kd(",", "<", Key::Comma),
+        kd(".", ">", Key::Dot),
+        kd("/", "?", Key::Slash),
     ],
     [
-        kd("Esc", Key::Esc),
-        kd("Tab", Key::Tab),
-        kd("-", Key::Minus),
-        kd("=", Key::Equal),
-        kd("'", Key::Apostrophe),
-        kd("`", Key::Grave),
-        kd("\\", Key::Backslash),
-        kd("[", Key::LeftBrace),
-        kd("]", Key::RightBrace),
-        kd("Ent", Key::Enter),
+        kd("Esc", "Esc", Key::Esc),
+        kd("Tab", "Tab", Key::Tab),
+        kd("-", "_", Key::Minus),
+        kd("=", "+", Key::Equal),
+        kd("'", "\"", Key::Apostrophe),
+        kd("`", "~", Key::Grave),
+        kd("\\", "|", Key::Backslash),
+        kd("[", "{", Key::LeftBrace),
+        kd("]", "}", Key::RightBrace),
+        kd("Ent", "Ent", Key::Enter),
     ],
 ];
 
@@ -247,6 +256,19 @@ fn open_pad(want: Option<&str>) -> Option<EvdevHandle<File>> {
 }
 
 fn draw_glyph(pixels: &mut [u32], width: i32, height: i32, x: i32, y: i32, scale: i32, ch: char) {
+    draw_glyph_color(pixels, width, height, x, y, scale, ch, COLOR_TEXT);
+}
+
+fn draw_glyph_color(
+    pixels: &mut [u32],
+    width: i32,
+    height: i32,
+    x: i32,
+    y: i32,
+    scale: i32,
+    ch: char,
+    color: u32,
+) {
     if !ch.is_ascii() {
         return;
     }
@@ -262,7 +284,7 @@ fn draw_glyph(pixels: &mut [u32], width: i32, height: i32, x: i32, y: i32, scale
                     let fx = x + gx * scale + px;
                     let fy = y + gy * scale + py;
                     if fx >= 0 && fx < width && fy >= 0 && fy < height {
-                        pixels[(fy * width + fx) as usize] = COLOR_TEXT;
+                        pixels[(fy * width + fx) as usize] = color;
                     }
                 }
             }
@@ -286,21 +308,29 @@ fn fill(pixels: &mut [u32], width: i32, height: i32, x: i32, y: i32, w: i32, h: 
 fn draw(app: &mut App) {
     let (width, height) = (app.width, app.height);
     let (sel_row, sel_col) = (app.sel_row, app.sel_col);
+    let shift = app.shift;
     let latched = app.shift || app.ctrl || app.alt;
     let pixels = app.pixels_mut();
 
+    let grid_y0 = LEGEND_H;
+    let grid_h = height - LEGEND_H;
     let cw = width / COLS as i32;
-    let ch = height / ROWS as i32;
+    let ch = grid_h / ROWS as i32;
     let scale = (ch / (GLYPH * 2)).max(1);
 
     fill(pixels, width, height, 0, 0, width, height, COLOR_BG);
 
+    for (i, ch_) in LEGEND.chars().enumerate() {
+        draw_glyph_color(pixels, width, height, 4 + i as i32 * GLYPH, 2, 1, ch_, COLOR_LEGEND);
+    }
+
     for r in 0..ROWS {
         for c in 0..COLS {
-            let label = KEYS[r][c].label;
+            let key = &KEYS[r][c];
+            let label = if shift { key.shifted } else { key.label };
             let len = label.chars().count() as i32;
             let x = c as i32 * cw;
-            let y = r as i32 * ch;
+            let y = grid_y0 + r as i32 * ch;
             let bg = if r == sel_row && c == sel_col {
                 COLOR_SELECTED
             } else {
@@ -317,10 +347,10 @@ fn draw(app: &mut App) {
         }
     }
 
-    // A latched modifier tints the top-left corner, which is cheaper to read
-    // at a glance than a status line.
+    // A latched modifier tints the top-left corner of the grid, which is
+    // cheaper to read at a glance than a status line.
     if latched {
-        fill(pixels, width, height, 0, 0, cw / 4, ch / 4, COLOR_LATCHED);
+        fill(pixels, width, height, 0, grid_y0, cw / 4, ch / 4, COLOR_LATCHED);
     }
 }
 
@@ -406,6 +436,11 @@ struct App {
     configured: bool,
     dirty: bool,
     running: bool,
+
+    // Held-direction repeat: Some(dir) while a D-pad/hat direction is held,
+    // with repeat_at marking when the next auto-repeat move is due.
+    repeat_dir: Option<(i32, i32)>,
+    repeat_at: Instant,
 }
 
 impl App {
@@ -420,45 +455,86 @@ fn move_sel(app: &mut App, dr: i32, dc: i32) {
     app.dirty = true;
 }
 
+// start_repeat begins auto-repeat for a just-pressed direction; stop_repeat
+// ends it on release, regardless of which direction was held.
+fn start_repeat(app: &mut App, dr: i32, dc: i32) {
+    app.repeat_dir = Some((dr, dc));
+    app.repeat_at = Instant::now() + REPEAT_DELAY;
+}
+
+fn stop_repeat(app: &mut App) {
+    app.repeat_dir = None;
+}
+
 fn on_pad_event(app: &mut App, ev: &sys::input_event) {
     if ev.type_ as i32 == sys::EV_ABS {
-        // A hat reports -1, 0 or 1; act only on the press.
-        if ev.code as i32 == sys::ABS_HAT0X && ev.value != 0 {
-            move_sel(app, 0, if ev.value > 0 { 1 } else { -1 });
-        } else if ev.code as i32 == sys::ABS_HAT0Y && ev.value != 0 {
-            move_sel(app, if ev.value > 0 { 1 } else { -1 }, 0);
+        if ev.code as i32 == sys::ABS_HAT0X {
+            if ev.value != 0 {
+                let dc = if ev.value > 0 { 1 } else { -1 };
+                move_sel(app, 0, dc);
+                start_repeat(app, 0, dc);
+            } else {
+                stop_repeat(app);
+            }
+        } else if ev.code as i32 == sys::ABS_HAT0Y {
+            if ev.value != 0 {
+                let dr = if ev.value > 0 { 1 } else { -1 };
+                move_sel(app, dr, 0);
+                start_repeat(app, dr, 0);
+            } else {
+                stop_repeat(app);
+            }
         }
         return;
     }
 
-    if ev.type_ as i32 != sys::EV_KEY || ev.value != 1 {
+    if ev.type_ as i32 != sys::EV_KEY {
+        return;
+    }
+    let code = ev.code as i32;
+
+    let dpad_dir = if code == sys::BTN_DPAD_LEFT {
+        Some((0, -1))
+    } else if code == sys::BTN_DPAD_RIGHT {
+        Some((0, 1))
+    } else if code == sys::BTN_DPAD_UP {
+        Some((-1, 0))
+    } else if code == sys::BTN_DPAD_DOWN {
+        Some((1, 0))
+    } else {
+        None
+    };
+    if let Some((dr, dc)) = dpad_dir {
+        if ev.value == 1 {
+            move_sel(app, dr, dc);
+            start_repeat(app, dr, dc);
+        } else if ev.value == 0 {
+            stop_repeat(app);
+        }
         return;
     }
 
-    let code = ev.code as i32;
-    if code == sys::BTN_DPAD_LEFT {
-        move_sel(app, 0, -1);
-    } else if code == sys::BTN_DPAD_RIGHT {
-        move_sel(app, 0, 1);
-    } else if code == sys::BTN_DPAD_UP {
-        move_sel(app, -1, 0);
-    } else if code == sys::BTN_DPAD_DOWN {
-        move_sel(app, 1, 0);
-    } else if code == sys::BTN_SOUTH {
+    if ev.value != 1 {
+        return;
+    }
+
+    // B is physically the bottom face button on this device's Nintendo-style
+    // layout, so it carries backspace; A confirms and types the selected key.
+    if code == sys::BTN_SOUTH {
+        tap(app, Key::Backspace);
+    } else if code == sys::BTN_EAST {
         let key = KEYS[app.sel_row][app.sel_col].code;
         tap(app, key);
-    } else if code == sys::BTN_EAST {
-        tap(app, Key::Backspace);
     } else if code == sys::BTN_WEST {
         tap(app, Key::Space);
     } else if code == sys::BTN_NORTH {
+        app.alt = !app.alt;
+        app.dirty = true;
+    } else if code == sys::BTN_TL || code == sys::BTN_TL2 {
         app.shift = !app.shift;
         app.dirty = true;
-    } else if code == sys::BTN_TL {
+    } else if code == sys::BTN_TR || code == sys::BTN_TR2 {
         app.ctrl = !app.ctrl;
-        app.dirty = true;
-    } else if code == sys::BTN_TR {
-        app.alt = !app.alt;
         app.dirty = true;
     } else if code == sys::BTN_START {
         tap(app, Key::Enter);
@@ -555,14 +631,14 @@ delegate_noop!(App: ignore zwlr_layer_shell_v1::ZwlrLayerShellV1);
 fn usage() -> ! {
     eprintln!(
         "usage: gpkbd [-h height] [-p pad-name]\n  \
-         -h  surface height in pixels (default 180)\n  \
+         -h  surface height in pixels (default {DEFAULT_HEIGHT})\n  \
          -p  substring of the gamepad's evdev name"
     );
     std::process::exit(2);
 }
 
 fn parse_args() -> (i32, Option<String>) {
-    let mut height = 180;
+    let mut height = DEFAULT_HEIGHT;
     let mut pad_name = None;
 
     let mut args = std::env::args().skip(1);
@@ -620,6 +696,8 @@ fn main() {
         configured: false,
         dirty: false,
         running: true,
+        repeat_dir: None,
+        repeat_at: Instant::now(),
     };
 
     event_queue
@@ -666,6 +744,18 @@ fn main() {
     while app.running {
         event_queue.flush().ok();
 
+        let timeout_ms: i32 = match app.repeat_dir {
+            Some(_) => {
+                let now = Instant::now();
+                if app.repeat_at <= now {
+                    0
+                } else {
+                    (app.repeat_at - now).as_millis().min(i32::MAX as u128) as i32
+                }
+            }
+            None => -1,
+        };
+
         if let Some(guard) = event_queue.prepare_read() {
             let wl_fd = guard.connection_fd().as_raw_fd();
             let pad_fd = app.pad.as_inner().as_raw_fd();
@@ -674,7 +764,7 @@ fn main() {
                 libc::pollfd { fd: pad_fd, events: libc::POLLIN, revents: 0 },
             ];
 
-            let ret = unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, -1) };
+            let ret = unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, timeout_ms) };
             if ret < 0 {
                 drop(guard);
                 if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
@@ -691,6 +781,13 @@ fn main() {
 
             if fds[1].revents & libc::POLLIN != 0 {
                 read_pad(&mut app);
+            }
+        }
+
+        if let Some((dr, dc)) = app.repeat_dir {
+            if Instant::now() >= app.repeat_at {
+                move_sel(&mut app, dr, dc);
+                app.repeat_at = Instant::now() + REPEAT_INTERVAL;
             }
         }
 
