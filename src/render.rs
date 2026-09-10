@@ -1,10 +1,8 @@
 use crate::font::Rasterizer;
 use crate::keys::{Cell, COLS, KEYS, LEGEND, ROWS};
 
-pub const LEGEND_H: i32 = 18;
-// 36px/row (unchanged from the 5-row grid); one fewer row now, so this
-// shrinks along with it, handing the freed space back to the terminal.
-pub const DEFAULT_HEIGHT: i32 = 36 * crate::keys::ROWS as i32 + LEGEND_H;
+pub const LEGEND_H: i32 = 14;
+pub const DEFAULT_HEIGHT: i32 = 28 * crate::keys::ROWS as i32 + LEGEND_H;
 
 pub const COLOR_BG: u32 = 0xff1d1d1d;
 pub const COLOR_KEY: u32 = 0xff2f2f36;
@@ -72,8 +70,8 @@ pub fn draw(
     let grid_h = height - LEGEND_H;
     let cw = width / COLS as i32;
     let ch = grid_h / ROWS as i32;
-    let key_px = (ch as f32 / 2.5).max(8.0);
-    let legend_px = (LEGEND_H as f32 - 4.0).max(8.0);
+    let key_px = (ch as f32 / 2.0).max(9.0);
+    let legend_px = (LEGEND_H as f32 - 1.0).max(9.0);
 
     fill(pixels, width, height, 0, 0, width, height, COLOR_BG);
 

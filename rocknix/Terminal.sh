@@ -4,8 +4,12 @@
 
 GPKBD=/storage/.local/bin/gpkbd
 # Rocknix has no /usr/share/fonts; gpkbd needs an explicit path to a font
-# that actually exists on-device.
-FONT=/usr/config/scummvm/themes/themes/fonts/GoMono-Regular.ttf
+# that actually exists on-device. Sans-serif reads better at the grid's
+# small key size than a monospace font does; EmulationStation already
+# ships one, matching the frontend's own look, so use that instead of
+# reaching into ScummVM's assets a second time (foot uses those for its
+# own monospace font, see rocknix/foot.ini).
+FONT=/usr/config/emulationstation/resources/Rubik-Regular.ttf
 KBD_HEIGHT=$("${GPKBD}" --print-height)
 
 # Leave room for gpkbd's overlay: without this, foot tiles to the full

@@ -91,7 +91,7 @@ pub static KEYS: [[Cell; COLS]; ROWS] = [
         key("l", "L", Key::L),
         key(";", ":", Key::Semicolon),
         key("'", "\"", Key::Apostrophe),
-        key("Ent", "Ent", Key::Enter),
+        key("Enter", "Enter", Key::Enter),
         Cell::Empty,
     ],
     [
