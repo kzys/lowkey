@@ -1,0 +1,5 @@
+/gpkbd
+/.sysroot/
+/wlr-layer-shell-unstable-v1-client-protocol.h
+/wlr-layer-shell-unstable-v1-protocol.c
+/xdg-shell-protocol.c
