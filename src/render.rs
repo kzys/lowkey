@@ -1,4 +1,4 @@
-use crate::font::Rasterizer;
+use crate::font::{Canvas, Rasterizer};
 use crate::keys::{Cell, COLS, KEYS, LEGEND, LEGEND_R1, ROWS};
 
 pub const LEGEND_H: i32 = 14;
@@ -45,39 +45,27 @@ fn text_width(font: &Rasterizer, text: &str, px: f32) -> f32 {
 /// draws each glyph twice, offset by a pixel, to fake a heavier weight the
 /// loaded font file may not have.
 #[allow(clippy::too_many_arguments)]
-fn draw_text(
-    pixels: &mut [u32],
-    width: i32,
-    height: i32,
-    x: i32,
-    y: i32,
-    px: f32,
-    text: &str,
-    color: u32,
-    font: &Rasterizer,
-    bold: bool,
-) {
+fn draw_text(canvas: &mut Canvas, x: i32, y: i32, px: f32, text: &str, color: u32, font: &Rasterizer, bold: bool) {
     let baseline_y = y + font.ascent(px).round() as i32;
     let mut cursor = x as f32;
     for ch in text.chars() {
         let cx = cursor.round() as i32;
-        font.draw(pixels, width, height, cx, baseline_y, px, ch, color);
+        font.draw(canvas, cx, baseline_y, px, ch, color);
         if bold {
-            font.draw(pixels, width, height, cx + 1, baseline_y, px, ch, color);
+            font.draw(canvas, cx + 1, baseline_y, px, ch, color);
         }
         cursor += font.advance(ch, px);
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn fill(pixels: &mut [u32], width: i32, height: i32, x: i32, y: i32, w: i32, h: i32, color: u32) {
+fn fill(canvas: &mut Canvas, x: i32, y: i32, w: i32, h: i32, color: u32) {
     for py in y..y + h {
-        if py < 0 || py >= height {
+        if py < 0 || py >= canvas.height {
             continue;
         }
         for px in x..x + w {
-            if px >= 0 && px < width {
-                pixels[(py * width + px) as usize] = color;
+            if px >= 0 && px < canvas.width {
+                canvas.pixels[(py * canvas.width + px) as usize] = color;
             }
         }
     }
@@ -85,28 +73,15 @@ fn fill(pixels: &mut [u32], width: i32, height: i32, x: i32, y: i32, w: i32, h: 
 
 /// Fills a cell with a 1px border ring around a (possibly different) fill
 /// color, so indicator cells read distinctly from typeable keys.
-#[allow(clippy::too_many_arguments)]
-fn fill_bordered(
-    pixels: &mut [u32],
-    width: i32,
-    height: i32,
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
-    border: u32,
-    fill_color: u32,
-) {
-    fill(pixels, width, height, x, y, w, h, border);
-    fill(pixels, width, height, x + 1, y + 1, w - 2, h - 2, fill_color);
+fn fill_bordered(canvas: &mut Canvas, x: i32, y: i32, w: i32, h: i32, border: u32, fill_color: u32) {
+    fill(canvas, x, y, w, h, border);
+    fill(canvas, x + 1, y + 1, w - 2, h - 2, fill_color);
 }
 
 /// Draws `label` centered in the cell at grid position `(x, y)`-`(cw, ch)`.
 #[allow(clippy::too_many_arguments)]
 fn draw_label(
-    pixels: &mut [u32],
-    width: i32,
-    height: i32,
+    canvas: &mut Canvas,
     x: i32,
     y: i32,
     cw: i32,
@@ -120,42 +95,30 @@ fn draw_label(
     let label_w = text_width(font, label, key_px);
     let tx = x + ((cw as f32 - label_w) / 2.0).round() as i32;
     let ty = y + ((ch as f32 - key_px) / 2.0).round() as i32;
-    draw_text(pixels, width, height, tx, ty, key_px, label, color, font, bold);
+    draw_text(canvas, tx, ty, key_px, label, color, font, bold);
 }
 
 /// Draws a Shift/Ctrl/R1 indicator cell: bordered and dim while idle, solid
 /// red with bold dark text while its chord is held.
 #[allow(clippy::too_many_arguments)]
-fn draw_indicator(
-    pixels: &mut [u32],
-    width: i32,
-    height: i32,
-    x: i32,
-    y: i32,
-    cw: i32,
-    ch: i32,
-    key_px: f32,
-    label: &str,
-    held: bool,
-    font: &Rasterizer,
-) {
+fn draw_indicator(canvas: &mut Canvas, x: i32, y: i32, cw: i32, ch: i32, key_px: f32, label: &str, held: bool, font: &Rasterizer) {
     let (border, fill_color, text_color) =
         if held { (COLOR_LATCHED, COLOR_LATCHED, COLOR_LATCHED_TEXT) } else { (COLOR_IND_BORDER, COLOR_IND, COLOR_IND_TEXT) };
-    fill_bordered(pixels, width, height, x + 1, y + 1, cw - 2, ch - 2, border, fill_color);
-    draw_label(pixels, width, height, x, y, cw, ch, key_px, label, text_color, held, font);
+    fill_bordered(canvas, x + 1, y + 1, cw - 2, ch - 2, border, fill_color);
+    draw_label(canvas, x, y, cw, ch, key_px, label, text_color, held, font);
 }
 
 /// Draws the D-pad/face-button overlay in place of the (now dimmed) keys it
 /// sits over.
-fn draw_nav_overlay(pixels: &mut [u32], width: i32, height: i32, grid_y0: i32, cw: i32, ch: i32, font: &Rasterizer) {
+fn draw_nav_overlay(canvas: &mut Canvas, grid_y0: i32, cw: i32, ch: i32, font: &Rasterizer) {
     // Smaller than a regular key's text: tiles carry longer labels ("Right",
     // "PgDn") than a single keycap glyph.
     let nav_px = (ch as f32 * 0.32).max(7.0);
     for &(row, col, label) in NAV_TILES.iter() {
         let x = col as i32 * cw;
         let y = grid_y0 + row as i32 * ch;
-        fill(pixels, width, height, x + 1, y + 1, cw - 2, ch - 2, COLOR_KEY);
-        draw_label(pixels, width, height, x, y, cw, ch, nav_px, label, COLOR_TEXT, false, font);
+        fill(canvas, x + 1, y + 1, cw - 2, ch - 2, COLOR_KEY);
+        draw_label(canvas, x, y, cw, ch, nav_px, label, COLOR_TEXT, false, font);
     }
 }
 
@@ -177,6 +140,8 @@ pub fn draw(
     latched: bool,
     font: &Rasterizer,
 ) {
+    let canvas = &mut Canvas::new(pixels, width, height);
+
     let grid_y0 = LEGEND_H;
     let grid_h = height - LEGEND_H;
     let cw = width / COLS as i32;
@@ -188,10 +153,10 @@ pub fn draw(
     // bleeds descenders into the grid's top row.
     let legend_px = (LEGEND_H as f32 - 4.0).max(8.0);
 
-    fill(pixels, width, height, 0, 0, width, height, COLOR_BG);
+    fill(canvas, 0, 0, width, height, COLOR_BG);
 
     let legend = if r1 { LEGEND_R1 } else { LEGEND };
-    draw_text(pixels, width, height, 4, 1, legend_px, legend, COLOR_LEGEND, font, false);
+    draw_text(canvas, 4, 1, legend_px, legend, COLOR_LEGEND, font, false);
 
     #[allow(clippy::needless_range_loop)]
     for r in 0..ROWS {
@@ -209,7 +174,7 @@ pub fn draw(
                     // show that, so landing here isn't mistaken for a stuck
                     // cursor.
                     if selected {
-                        fill(pixels, width, height, x + 1, y + 1, cw - 2, ch - 2, COLOR_SELECTED);
+                        fill(canvas, x + 1, y + 1, cw - 2, ch - 2, COLOR_SELECTED);
                     }
                 }
                 Cell::Key(key) => {
@@ -221,24 +186,24 @@ pub fn draw(
                     let label = if shift { key.shifted } else { key.label };
                     let (bg, text_color, bold) =
                         if selected { (COLOR_SELECTED, COLOR_SELECTED_TEXT, true) } else { (COLOR_KEY, COLOR_TEXT, false) };
-                    fill(pixels, width, height, x + 1, y + 1, cw - 2, ch - 2, bg);
-                    draw_label(pixels, width, height, x, y, cw, ch, key_px, label, text_color, bold, font);
+                    fill(canvas, x + 1, y + 1, cw - 2, ch - 2, bg);
+                    draw_label(canvas, x, y, cw, ch, key_px, label, text_color, bold, font);
                 }
-                Cell::Shift => draw_indicator(pixels, width, height, x, y, cw, ch, key_px, "Shift", shift, font),
-                Cell::Ctrl => draw_indicator(pixels, width, height, x, y, cw, ch, key_px, "Ctrl", ctrl, font),
-                Cell::R1 => draw_indicator(pixels, width, height, x, y, cw, ch, key_px, "R1", r1, font),
+                Cell::Shift => draw_indicator(canvas, x, y, cw, ch, key_px, "Shift", shift, font),
+                Cell::Ctrl => draw_indicator(canvas, x, y, cw, ch, key_px, "Ctrl", ctrl, font),
+                Cell::R1 => draw_indicator(canvas, x, y, cw, ch, key_px, "R1", r1, font),
             }
         }
     }
 
     if r1 {
-        draw_nav_overlay(pixels, width, height, grid_y0, cw, ch, font);
+        draw_nav_overlay(canvas, grid_y0, cw, ch, font);
     }
 
     // A latched modifier tints the top-left corner of the grid, which is
     // cheaper to read at a glance than a status line.
     if latched {
-        fill(pixels, width, height, 0, grid_y0, cw / 4, ch / 4, COLOR_LATCHED);
+        fill(canvas, 0, grid_y0, cw / 4, ch / 4, COLOR_LATCHED);
     }
 }
 

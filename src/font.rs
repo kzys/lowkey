@@ -12,6 +12,20 @@ pub const DEFAULT_PATH: &str = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.
 
 type GlyphCache = HashMap<(char, u32), (Metrics, Vec<u8>)>;
 
+/// A pixel buffer and its dimensions, bundled so drawing functions don't
+/// have to take `(pixels, width, height)` as three separate arguments.
+pub struct Canvas<'a> {
+    pub pixels: &'a mut [u32],
+    pub width: i32,
+    pub height: i32,
+}
+
+impl<'a> Canvas<'a> {
+    pub fn new(pixels: &'a mut [u32], width: i32, height: i32) -> Canvas<'a> {
+        Canvas { pixels, width, height }
+    }
+}
+
 pub struct Rasterizer {
     font: Font,
     cache: RefCell<GlyphCache>,
@@ -44,19 +58,8 @@ impl Rasterizer {
     }
 
     /// Draws `ch` with its baseline-left origin at `(x, baseline_y)`, blending
-    /// the glyph's coverage into `pixels` over whatever is already there.
-    #[allow(clippy::too_many_arguments)]
-    pub fn draw(
-        &self,
-        pixels: &mut [u32],
-        width: i32,
-        height: i32,
-        x: i32,
-        baseline_y: i32,
-        px: f32,
-        ch: char,
-        color: u32,
-    ) {
+    /// the glyph's coverage into `canvas` over whatever is already there.
+    pub fn draw(&self, canvas: &mut Canvas, x: i32, baseline_y: i32, px: f32, ch: char, color: u32) {
         let (m, bitmap) = self.glyph(ch, px);
         let gx = x + m.xmin;
         let gy = baseline_y - m.height as i32 - m.ymin;
@@ -69,11 +72,11 @@ impl Rasterizer {
                 }
                 let fx = gx + col;
                 let fy = gy + row;
-                if fx < 0 || fx >= width || fy < 0 || fy >= height {
+                if fx < 0 || fx >= canvas.width || fy < 0 || fy >= canvas.height {
                     continue;
                 }
-                let idx = (fy * width + fx) as usize;
-                pixels[idx] = blend(pixels[idx], color, a);
+                let idx = (fy * canvas.width + fx) as usize;
+                canvas.pixels[idx] = blend(canvas.pixels[idx], color, a);
             }
         }
     }
