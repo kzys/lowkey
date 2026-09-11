@@ -4,21 +4,24 @@ use crate::keys::{Cell, COLS, KEYS, LEGEND, LEGEND_R1, ROWS};
 pub const LEGEND_H: i32 = 14;
 pub const DEFAULT_HEIGHT: i32 = 28 * crate::keys::ROWS as i32 + LEGEND_H;
 
-pub const COLOR_BG: u32 = 0xff1a1c22;
-pub const COLOR_KEY: u32 = 0xff262a35;
-pub const COLOR_SELECTED: u32 = 0xff6f7ff0;
-pub const COLOR_SELECTED_TEXT: u32 = 0xff12131a;
-pub const COLOR_TEXT: u32 = 0xffe7e8ee;
-pub const COLOR_LEGEND: u32 = 0xff8a8fa8;
+// Grayscale throughout, with exactly two accents: blue marks the
+// focused/selected key, red marks a held chord. Nothing else in the grid
+// uses color, so either one reads at a glance.
+pub const COLOR_BG: u32 = 0xff121212;
+pub const COLOR_KEY: u32 = 0xff232323;
+pub const COLOR_SELECTED: u32 = 0xff4f8cff;
+pub const COLOR_SELECTED_TEXT: u32 = 0xff121212;
+pub const COLOR_TEXT: u32 = 0xffececec;
+pub const COLOR_LEGEND: u32 = 0xff8a8a8a;
 /// Idle background for the Shift/Ctrl/R1 indicator cells — distinct from a
 /// regular key so an unheld chord doesn't read as a typeable key.
-pub const COLOR_IND: u32 = 0xff1e2029;
-pub const COLOR_IND_BORDER: u32 = 0xff3a3d4a;
-pub const COLOR_IND_TEXT: u32 = 0xff9098b0;
+pub const COLOR_IND: u32 = 0xff1a1a1a;
+pub const COLOR_IND_BORDER: u32 = 0xff3a3a3a;
+pub const COLOR_IND_TEXT: u32 = 0xff8a8a8a;
 /// An indicator lit because its chord is currently held (also used for the
 /// latched-modifier corner tint).
-pub const COLOR_LATCHED: u32 = 0xffe0a458;
-pub const COLOR_LATCHED_TEXT: u32 = 0xff1a1c22;
+pub const COLOR_LATCHED: u32 = 0xffe5484d;
+pub const COLOR_LATCHED_TEXT: u32 = 0xff121212;
 
 /// The D-pad/face-button overlay shown while R1 is held, replacing the grid
 /// (see `pad::decode` for what each face button sends in this state). Left
@@ -120,7 +123,7 @@ fn draw_label(
 }
 
 /// Draws a Shift/Ctrl/R1 indicator cell: bordered and dim while idle, solid
-/// amber with bold dark text while its chord is held.
+/// red with bold dark text while its chord is held.
 #[allow(clippy::too_many_arguments)]
 fn draw_indicator(
     pixels: &mut [u32],
