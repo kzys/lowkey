@@ -38,6 +38,14 @@ pub struct PadState {
     tl_held: bool,
     tl2_held: bool,
     r1_held: bool,
+    /// Whether each face button's current press was routed through R1's nav
+    /// chord rather than its normal one-shot meaning — set at press time (so
+    /// it survives R1 being released first) and checked at release time to
+    /// decide whether that release should stop the nav action's repeat.
+    nav_west: bool,
+    nav_south: bool,
+    nav_north: bool,
+    nav_east: bool,
 }
 
 impl PadState {
@@ -97,22 +105,46 @@ pub fn decode(state: &mut PadState, ev: &sys::input_event) -> Option<PadEvent> {
         };
     }
 
+    if code == sys::BTN_WEST {
+        return face_button(&mut state.nav_west, state.r1_held, ev.value, PadEvent::PageUp, PadEvent::Enter);
+    }
+    if code == sys::BTN_SOUTH {
+        return face_button(&mut state.nav_south, state.r1_held, ev.value, PadEvent::PageDown, PadEvent::Backspace);
+    }
+    if code == sys::BTN_NORTH {
+        return face_button(&mut state.nav_north, state.r1_held, ev.value, PadEvent::Arrow(Key::Tab), PadEvent::Space);
+    }
+    if code == sys::BTN_EAST {
+        return face_button(&mut state.nav_east, state.r1_held, ev.value, PadEvent::Arrow(Key::Esc), PadEvent::Type);
+    }
+
     if ev.value != 1 {
         return None;
     }
 
-    if code == sys::BTN_SOUTH {
-        Some(if state.r1_held { PadEvent::PageDown } else { PadEvent::Backspace })
-    } else if code == sys::BTN_EAST {
-        Some(if state.r1_held { PadEvent::Arrow(Key::Esc) } else { PadEvent::Type })
-    } else if code == sys::BTN_NORTH {
-        Some(if state.r1_held { PadEvent::Arrow(Key::Tab) } else { PadEvent::Space })
-    } else if code == sys::BTN_WEST {
-        Some(if state.r1_held { PadEvent::PageUp } else { PadEvent::Enter })
-    } else if code == sys::BTN_SELECT {
+    if code == sys::BTN_SELECT {
         Some(PadEvent::Quit)
     } else {
         None
+    }
+}
+
+/// Decodes a press/release of a face button that means one thing normally
+/// and another (repeating) thing while R1's nav chord is held. Whether R1
+/// was held is latched into `nav` at press time, so the matching release
+/// still reports `MoveEnd` (stopping the repeat) even if R1 was released
+/// first — mirroring how the D-pad's own press/release is handled above.
+fn face_button(nav: &mut bool, r1_held: bool, value: i32, nav_action: PadEvent, normal_action: PadEvent) -> Option<PadEvent> {
+    match value {
+        1 => {
+            *nav = r1_held;
+            Some(if *nav { nav_action } else { normal_action })
+        }
+        0 if *nav => {
+            *nav = false;
+            Some(PadEvent::MoveEnd)
+        }
+        _ => None,
     }
 }
 
@@ -292,6 +324,27 @@ mod tests {
         assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_SOUTH, 1)), Some(PadEvent::Backspace));
         assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_NORTH, 1)), Some(PadEvent::Space));
         assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_EAST, 1)), Some(PadEvent::Type));
+    }
+
+    #[test]
+    fn releasing_a_nav_face_button_stops_its_repeat() {
+        let mut state = PadState::new();
+        decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TR, 1));
+
+        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_WEST, 1)), Some(PadEvent::PageUp));
+        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_WEST, 0)), Some(PadEvent::MoveEnd));
+    }
+
+    #[test]
+    fn releasing_r1_before_the_face_button_still_stops_its_repeat() {
+        let mut state = PadState::new();
+        decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TR, 1));
+        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_SOUTH, 1)), Some(PadEvent::PageDown));
+
+        // R1 lets go first; the still-held B should still stop its own
+        // repeat once it's released, rather than firing PageDown forever.
+        decode(&mut state, &ev(sys::EV_KEY, sys::BTN_TR, 0));
+        assert_eq!(decode(&mut state, &ev(sys::EV_KEY, sys::BTN_SOUTH, 0)), Some(PadEvent::MoveEnd));
     }
 
     #[test]
