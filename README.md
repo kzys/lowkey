@@ -47,13 +47,13 @@ does, swapping to R1's own hints while its nav chord is held.
 ## Build
 
 ```
-make                # cross-builds target/aarch64-unknown-linux-gnu/release/lowkey
-make install        # scp to the device, killing any running instance first
-make install-config # scp rocknix/foot.ini and rocknix/Terminal.sh into place
+make                                    # cross-builds target/aarch64-unknown-linux-gnu/release/lowkey
+make install        HOST=root@192.0.2.1   # scp to the device, killing any running instance first
+make install-config HOST=root@192.0.2.1   # scp rocknix/foot.ini and rocknix/Terminal.sh into place
 ```
 
-`HOST` in the Makefile can be overridden on the command line. The target
-needs `rustup target add aarch64-unknown-linux-gnu` and an
+`install` and `install-config` require `HOST` on the command line. The
+target needs `rustup target add aarch64-unknown-linux-gnu` and an
 `aarch64-linux-gnu-gcc` on `PATH` for linking (configured in
 `.cargo/config.toml`).
 
