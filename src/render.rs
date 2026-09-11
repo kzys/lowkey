@@ -69,6 +69,7 @@ fn draw_text(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn fill(pixels: &mut [u32], width: i32, height: i32, x: i32, y: i32, w: i32, h: i32, color: u32) {
     for py in y..y + h {
         if py < 0 || py >= height {
@@ -192,6 +193,7 @@ pub fn draw(
     let legend = if r1 { LEGEND_R1 } else { LEGEND };
     draw_text(pixels, width, height, 4, 1, legend_px, legend, COLOR_LEGEND, font, false);
 
+    #[allow(clippy::needless_range_loop)]
     for r in 0..ROWS {
         for c in 0..COLS {
             let x = c as i32 * cw;

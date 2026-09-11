@@ -10,9 +10,11 @@ use crate::util::die;
 
 pub const DEFAULT_PATH: &str = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf";
 
+type GlyphCache = HashMap<(char, u32), (Metrics, Vec<u8>)>;
+
 pub struct Rasterizer {
     font: Font,
-    cache: RefCell<HashMap<(char, u32), (Metrics, Vec<u8>)>>,
+    cache: RefCell<GlyphCache>,
 }
 
 impl Rasterizer {
@@ -43,6 +45,7 @@ impl Rasterizer {
 
     /// Draws `ch` with its baseline-left origin at `(x, baseline_y)`, blending
     /// the glyph's coverage into `pixels` over whatever is already there.
+    #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &self,
         pixels: &mut [u32],

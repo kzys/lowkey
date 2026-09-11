@@ -178,10 +178,11 @@ mod tests {
     fn letters_shift_to_uppercase() {
         for row in &KEYS {
             for cell in row {
-                if let Cell::Key(k) = cell {
-                    if k.label.len() == 1 && k.label.chars().next().unwrap().is_ascii_alphabetic() {
-                        assert_eq!(k.shifted, k.label.to_uppercase());
-                    }
+                if let Cell::Key(k) = cell
+                    && k.label.len() == 1
+                    && k.label.chars().next().unwrap().is_ascii_alphabetic()
+                {
+                    assert_eq!(k.shifted, k.label.to_uppercase());
                 }
             }
         }
