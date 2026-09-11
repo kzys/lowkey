@@ -96,7 +96,3 @@ bare `Page_Up`/`Page_Down` because that's what lowkey's R1 chord sends, and
 lowkey also cross-builds with no runtime dependency on the device's
 libwayland: `wayland-client`'s pure-Rust backend speaks the wire protocol
 directly, so there's nothing to pull off the device before linking.
-
-## Roadmap
-
-Nothing queued right now.
