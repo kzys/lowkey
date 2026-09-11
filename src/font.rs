@@ -12,6 +12,30 @@ pub const DEFAULT_PATH: &str = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.
 
 type GlyphCache = HashMap<(char, u32), (Metrics, Vec<u8>)>;
 
+#[derive(Clone, Copy)]
+pub struct Point {
+    pub x: i32,
+    pub y: i32,
+}
+
+impl Point {
+    pub fn new(x: i32, y: i32) -> Point {
+        Point { x, y }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Size {
+    pub width: i32,
+    pub height: i32,
+}
+
+impl Size {
+    pub fn new(width: i32, height: i32) -> Size {
+        Size { width, height }
+    }
+}
+
 /// A pixel buffer and its dimensions, bundled so drawing functions don't
 /// have to take `(pixels, width, height)` as three separate arguments.
 pub struct Canvas<'a> {
