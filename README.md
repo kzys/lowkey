@@ -8,7 +8,7 @@ takes keyboard focus, reads the pad straight from evdev, and types through a
 uinput device. Keystrokes land in whatever the compositor has focused, so no
 pointer, no compositor-specific IPC, and no input-method support is needed.
 
-![The keyboard grid over a terminal, digit row selected](docs/img/grid.png)
+![The keyboard grid over a foot terminal running ps fax](docs/img/grid.png)
 
 ## Controls
 
