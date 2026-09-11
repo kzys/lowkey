@@ -46,7 +46,7 @@ impl PadState {
     }
 }
 
-/// Decodes one raw evdev event, or None if it's not one gpkbd acts on.
+/// Decodes one raw evdev event, or None if it's not one lowkey acts on.
 ///
 /// B is physically the bottom face button on this device's Nintendo-style
 /// layout, so it carries backspace; A confirms and types the selected key.

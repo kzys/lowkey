@@ -1,4 +1,4 @@
-# gpkbd
+# lowkey
 
 An on-screen keyboard for typing with a gamepad.
 
@@ -47,7 +47,7 @@ Working:
 - Bottom-anchored overlay sized with `-h`; pad picked by name with `-p` or
   auto-detected as the first device with a `BTN_SOUTH`.
 - Key/legend text is rendered with `fontdue` from a TTF/OTF given with `-f`
-  or `$GPKBD_FONT` (default `/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf`,
+  or `$LOWKEY_FONT` (default `/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf`,
   which doesn't exist on ROCKNIX — see `rocknix/Terminal.sh`).
 - `--print-height` prints the effective height and exits, so a launcher
   script can reserve that much screen space without hardcoding it.
@@ -58,7 +58,7 @@ Working:
 ## Build
 
 ```
-make                # cross-builds target/aarch64-unknown-linux-gnu/release/gpkbd
+make                # cross-builds target/aarch64-unknown-linux-gnu/release/lowkey
 make install        # scp to the device, killing any running instance first
 make install-config # scp rocknix/foot.ini and rocknix/Terminal.sh into place
 ```
@@ -71,10 +71,10 @@ needs `rustup target add aarch64-unknown-linux-gnu` and an
 ## rocknix/
 
 `foot.ini` and `Terminal.sh` (the EmulationStation Ports launcher that opens
-a shell with gpkbd's overlay) live here because gpkbd's own behavior drives
+a shell with lowkey's overlay) live here because lowkey's own behavior drives
 their content directly: `foot.ini`'s `scrollback-up-page`/`down-page` bind to
-bare `Page_Up`/`Page_Down` because that's what gpkbd's R1 chord sends, and
-`Terminal.sh` hardcodes gpkbd's font path and reserves screen space with
+bare `Page_Up`/`Page_Down` because that's what lowkey's R1 chord sends, and
+`Terminal.sh` hardcodes lowkey's font path and reserves screen space with
 `--print-height`. `make install-config` deploys both.
 
 ## Roadmap

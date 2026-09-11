@@ -1,4 +1,4 @@
-// gpkbd is an on-screen keyboard driven by a gamepad.
+// lowkey is an on-screen keyboard driven by a gamepad.
 //
 // It draws a grid of keys on a layer-shell surface that never takes keyboard
 // focus, reads the pad straight from evdev, and types through a uinput device.
@@ -112,7 +112,7 @@ fn commit(app: &mut App) {
 fn make_buffer(app: &mut App, qh: &QueueHandle<App>) {
     let size = (app.width as usize) * (app.height as usize) * 4;
 
-    let name = CString::new("gpkbd").unwrap();
+    let name = CString::new("lowkey").unwrap();
     let raw_fd = unsafe { libc::memfd_create(name.as_ptr(), libc::MFD_CLOEXEC) };
     if raw_fd < 0 {
         die(&format!("memfd_create: {}", std::io::Error::last_os_error()));
@@ -232,12 +232,12 @@ delegate_noop!(App: ignore zwlr_layer_shell_v1::ZwlrLayerShellV1);
 
 fn usage() -> ! {
     eprintln!(
-        "usage: gpkbd [-h height] [-p pad-name] [-f font-path] [--print-height]\n  \
+        "usage: lowkey [-h height] [-p pad-name] [-f font-path] [--print-height]\n  \
          -h              surface height in pixels (default {})\n  \
          -p              substring of the gamepad's evdev name\n  \
-         -f              path to a TTF/OTF font (default {}, or $GPKBD_FONT)\n  \
+         -f              path to a TTF/OTF font (default {}, or $LOWKEY_FONT)\n  \
          --print-height  print the effective height and exit, for callers\n  \
-         \x20                that need to reserve screen space for gpkbd",
+         \x20                that need to reserve screen space for lowkey",
         render::DEFAULT_HEIGHT,
         font::DEFAULT_PATH,
     );
@@ -255,7 +255,7 @@ fn parse_args() -> Args {
     let mut height = render::DEFAULT_HEIGHT;
     let mut pad_name = None;
     let mut font_path =
-        std::env::var("GPKBD_FONT").unwrap_or_else(|_| font::DEFAULT_PATH.to_string());
+        std::env::var("LOWKEY_FONT").unwrap_or_else(|_| font::DEFAULT_PATH.to_string());
     let mut print_height = false;
 
     let mut args = std::env::args().skip(1);
@@ -345,7 +345,7 @@ fn main() {
         app.surface.as_ref().unwrap(),
         app.output.as_ref(),
         zwlr_layer_shell_v1::Layer::Overlay,
-        "gpkbd".to_string(),
+        "lowkey".to_string(),
         &qh,
         (),
     );

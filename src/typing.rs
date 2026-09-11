@@ -93,7 +93,7 @@ pub fn open_uinput() -> UInputHandle<File> {
 
     let id = InputId { bustype: sys::BUS_VIRTUAL, vendor: 0x1209, product: 0x0001, version: 0 };
     uinput
-        .create(&id, b"gpkbd", 0, &[])
+        .create(&id, b"lowkey", 0, &[])
         .unwrap_or_else(|e| die(&format!("UI_DEV_SETUP/UI_DEV_CREATE: {e}")));
 
     // Give the compositor a moment to notice the device before typing at it.
