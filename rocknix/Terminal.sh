@@ -10,21 +10,31 @@ LOWKEY=/storage/.local/bin/lowkey
 # reaching into ScummVM's assets a second time (foot uses those for its
 # own monospace font, see rocknix/foot.ini).
 FONT=/usr/config/emulationstation/resources/Rubik-Regular.ttf
-KBD_HEIGHT=$("${LOWKEY}" --print-height)
+NOMINAL_HEIGHT=$("${LOWKEY}" --print-height)
 
 # Leave room for lowkey's overlay: without this, foot tiles to the full
 # 640x480 panel and its bottom rows end up hidden behind the keyboard.
-foot --window-size-pixels=640x$((480 - KBD_HEIGHT)) &
+# Floating (rather than tiled) so foot renders above EmulationStation's
+# fullscreen frontend surface.
+foot &
 FOOT_PID=$!
 
 for i in $(seq 1 20); do
-	swaymsg "[pid=${FOOT_PID}] floating enable, move position 0 0" 2>/dev/null \
+	swaymsg "[pid=${FOOT_PID}] floating enable, resize set 640px $((480 - NOMINAL_HEIGHT))px, move position 0 0" 2>/dev/null \
 		| grep -q '"success": *true' && break
 	sleep 0.05
 done
 swaymsg "[pid=${FOOT_PID}] focus" >/dev/null
 
-"${LOWKEY}" -f "${FONT}" &
+# foot rounds the height we asked for down to a whole number of terminal
+# rows, so it ends up a few pixels short of NOMINAL_HEIGHT's complement.
+# Rather than hardcode that shortfall (font- and pixel-size-dependent), ask
+# sway what foot actually settled on and give lowkey exactly what's left,
+# so the two meet with no gap between them.
+FOOT_HEIGHT=$(swaymsg -t get_tree | jq '[.. | objects | select(.name == "foot") | .rect.height] | first')
+KBD_HEIGHT=$((480 - FOOT_HEIGHT))
+
+"${LOWKEY}" -f "${FONT}" -h "${KBD_HEIGHT}" &
 LOWKEY_PID=$!
 
 wait -n "${LOWKEY_PID}" "${FOOT_PID}"

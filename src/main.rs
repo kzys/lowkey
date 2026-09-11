@@ -356,6 +356,11 @@ fn main() {
             | zwlr_layer_surface_v1::Anchor::Right,
     );
     layer_surface.set_size(0, app.height as u32);
+    // Reserve this height at the bottom of the output, so sway shrinks
+    // tiled windows (the terminal) to the remaining area instead of them
+    // guessing our height and asking foot for an exact pixel size — which
+    // foot then rounds down to a whole number of rows, leaving a gap.
+    layer_surface.set_exclusive_zone(app.height);
     // Never take focus, or the keystrokes would come straight back to us.
     layer_surface.set_keyboard_interactivity(zwlr_layer_surface_v1::KeyboardInteractivity::None);
 

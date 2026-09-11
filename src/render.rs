@@ -96,15 +96,12 @@ fn draw_indicator(canvas: &mut Canvas, pos: Point, size: Size, key_px: f32, labe
 }
 
 /// Draws the D-pad/face-button overlay in place of the (now dimmed) keys it
-/// sits over.
-fn draw_nav_overlay(canvas: &mut Canvas, grid_y0: i32, cell: Size, font: &Rasterizer) {
-    // Smaller than a regular key's text: tiles carry longer labels ("Right",
-    // "PgDn") than a single keycap glyph.
-    let nav_px = (cell.height as f32 * 0.32).max(7.0);
+/// sits over, at the same text size as a regular key.
+fn draw_nav_overlay(canvas: &mut Canvas, grid_y0: i32, cell: Size, key_px: f32, font: &Rasterizer) {
     for &(row, col, label) in NAV_TILES.iter() {
         let pos = Point::new(col as i32 * cell.width, grid_y0 + row as i32 * cell.height);
         fill(canvas, Point::new(pos.x + 1, pos.y + 1), Size::new(cell.width - 2, cell.height - 2), COLOR_KEY);
-        draw_label(canvas, pos, cell, nav_px, label, COLOR_TEXT, false, font);
+        draw_label(canvas, pos, cell, key_px, label, COLOR_TEXT, false, font);
     }
 }
 
@@ -184,7 +181,7 @@ pub fn draw(
     }
 
     if r1 {
-        draw_nav_overlay(canvas, grid_y0, cell, font);
+        draw_nav_overlay(canvas, grid_y0, cell, key_px, font);
     }
 
     // A latched modifier tints the top-left corner of the grid, which is
